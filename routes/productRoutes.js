@@ -5,7 +5,6 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 
 // @desc    Fetch all products
 // @route   GET /api/products
-// @access  Public
 router.get('/', async (req, res) => {
   const products = await Product.find({});
   res.json(products);
@@ -13,7 +12,6 @@ router.get('/', async (req, res) => {
 
 // @desc    Fetch single product
 // @route   GET /api/products/:id
-// @access  Public
 router.get('/:id', async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (product) {
@@ -23,20 +21,22 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// @desc    Create a product
+// @desc    Create a product (CORRIGÉ)
 // @route   POST /api/products
 // @access  Private/Admin
 router.post('/', protect, admin, async (req, res) => {
-    const { name, price, description, image, countInStock } = req.body;
-    const product = new Product({
-        name,
-        price,
-        description,
-        image,
-        countInStock,
-    });
-    const createdProduct = await product.save();
-    res.status(201).json(createdProduct);
+  // On crée un produit avec des valeurs par défaut
+  const product = new Product({
+    name: 'Exemple de nom',
+    price: 0,
+    user: req.user._id, // Associe le produit à l'admin qui le crée
+    image: '/images/sample.jpg',
+    countInStock: 0,
+    description: 'Exemple de description',
+  });
+
+  const createdProduct = await product.save();
+  res.status(201).json(createdProduct);
 });
 
 // @desc    Update a product
@@ -55,7 +55,7 @@ router.put('/:id', protect, admin, async (req, res) => {
         const updatedProduct = await product.save();
         res.json(updatedProduct);
     } else {
-        res.status(404).send('Product not found');
+        res.status(404).json({ message: 'Produit non trouvé' });
     }
 });
 
@@ -66,9 +66,9 @@ router.delete('/:id', protect, admin, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
         await product.deleteOne();
-        res.json({ message: 'Product removed' });
+        res.json({ message: 'Produit supprimé' });
     } else {
-        res.status(404).send('Product not found');
+        res.status(404).json({ message: 'Produit non trouvé' });
     }
 });
 
