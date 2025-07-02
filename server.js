@@ -1,6 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import cors from 'cors';
+import cors from 'cors'; // On importe cors
 import connectDB from './config/db.js';
 
 import productRoutes from './routes/productRoutes.js';
@@ -11,22 +11,8 @@ dotenv.config();
 connectDB();
 const app = express();
 
-// --- NOUVELLE CONFIGURATION CORS ---
-// On définit l'URL exacte de notre frontend
-const allowedOrigins = ['https://gty-express-frontend.onrender.com'];
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    // On autorise si l'origine de la requête est dans notre liste
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-};
-app.use(cors(corsOptions));
-// --- FIN DE LA NOUVELLE CONFIGURATION ---
+// --- CONFIGURATION CORS SIMPLIFIÉE ---
+app.use(cors()); // On autorise TOUTES les origines pour le test
 
 app.use(express.json());
 
