@@ -56,4 +56,12 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// @desc    Logout user
+// @route   POST /api/users/logout
+// @access  Public
+router.post('/logout', (req, res) => {
+  res.status(200).json({ message: 'Logged out successfully' });
+});
+
+
 export default router;
