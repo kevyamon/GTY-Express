@@ -11,12 +11,23 @@ dotenv.config();
 connectDB();
 const app = express();
 
-// Configuration CORS améliorée
+// --- NOUVELLE CONFIGURATION CORS ---
+// On définit l'URL exacte de notre frontend
+const allowedOrigins = ['https://gty-express-frontend.onrender.com'];
+
 const corsOptions = {
-  origin: 'https://gty-express-frontend.onrender.com', // L'URL de votre frontend
-  optionsSuccessStatus: 200 
+  origin: (origin, callback) => {
+    // On autorise si l'origine de la requête est dans notre liste
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
 };
 app.use(cors(corsOptions));
+// --- FIN DE LA NOUVELLE CONFIGURATION ---
+
 app.use(express.json());
 
 app.get('/', (req, res) => {
