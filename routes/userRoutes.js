@@ -12,7 +12,6 @@ const generateToken = (id) => {
 
 // @desc    Auth user & get token (Login)
 // @route   POST /api/users/login
-// @access  Public
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -26,39 +25,51 @@ router.post('/login', async (req, res) => {
       token: generateToken(user._id),
     });
   } else {
-    res.status(401).send('Invalid email or password');
+    res.status(401).json({ message: 'Email ou mot de passe invalide' });
   }
 });
 
 // @desc    Register a new user
 // @route   POST /api/users/register
-// @access  Public
 router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body;
-  const userExists = await User.findOne({ email });
+  try { // On ajoute un bloc try...catch pour tout sécuriser
+    const { name, email, password } = req.body;
 
-  if (userExists) {
-    return res.status(400).send('User already exists');
-  }
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Veuillez remplir tous les champs' });
+    }
 
-  const user = await User.create({ name, email, password });
+    const userExists = await User.findOne({ email });
 
-  if (user) {
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id),
+    if (userExists) {
+      return res.status(400).json({ message: 'Cet utilisateur existe déjà' });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
     });
-  } else {
-    res.status(400).send('Invalid user data');
+
+    if (user) {
+      res.status(201).json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        token: generateToken(user._id),
+      });
+    } else {
+      res.status(400).json({ message: 'Données utilisateur invalides' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
 
 // @desc    Logout user
 // @route   POST /api/users/logout
-// @access  Public
 router.post('/logout', (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 });
