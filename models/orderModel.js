@@ -9,7 +9,11 @@ const orderSchema = mongoose.Schema(
         qty: { type: Number, required: true },
         image: { type: String, required: true },
         price: { type: Number, required: true },
-        product: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'Product' },
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          required: true,
+          ref: 'Product',
+        },
       },
     ],
     shippingAddress: {
@@ -17,7 +21,10 @@ const orderSchema = mongoose.Schema(
       city: { type: String, required: true },
       postalCode: { type: String, required: true },
       country: { type: String, required: true },
+      phone: { type: String, required: true }, // CHAMP AJOUTÉ
     },
+    paymentMethod: { type: String, required: true },
+    // ... autres champs ...
     totalPrice: { type: Number, required: true, default: 0.0 },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
