@@ -3,20 +3,36 @@ const router = express.Router();
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
+// @desc    Fetch all products OR search by keyword
+// @route   GET /api/products
 router.get('/', async (req, res) => {
-  const products = await Product.find({});
+  const keyword = req.query.keyword
+    ? {
+        name: {
+          $regex: req.query.keyword,
+          $options: 'i', // 'i' pour insensible à la casse (majuscules/minuscules)
+        },
+      }
+    : {};
+
+  const products = await Product.find({ ...keyword });
   res.json(products);
 });
 
+// @desc    Fetch single product
+// @route   GET /api/products/:id
 router.get('/:id', async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (product) {
     res.json(product);
   } else {
-    res.status(404).send('Product not found');
+    res.status(404).json({ message: 'Produit non trouvé' });
   }
 });
 
+// @desc    Create a product
+// @route   POST /api/products
+// @access  Private/Admin
 router.post('/', protect, admin, async (req, res) => {
   const product = new Product({
     name: 'Exemple de nom',
@@ -30,13 +46,17 @@ router.post('/', protect, admin, async (req, res) => {
   res.status(201).json(createdProduct);
 });
 
+// @desc    Update a product
+// @route   PUT /api/products/:id
+// @access  Private/Admin
 router.put('/:id', protect, admin, async (req, res) => {
-    const { name, price, description, image, countInStock } = req.body;
+    const { name, price, description, image, countInStock, originalPrice } = req.body;
     const product = await Product.findById(req.params.id);
 
     if (product) {
         product.name = name;
         product.price = price;
+        product.originalPrice = originalPrice;
         product.description = description;
         product.image = image;
         product.countInStock = countInStock;
@@ -47,6 +67,9 @@ router.put('/:id', protect, admin, async (req, res) => {
     }
 });
 
+// @desc    Delete a product
+// @route   DELETE /api/products/:id
+// @access  Private/Admin
 router.delete('/:id', protect, admin, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
