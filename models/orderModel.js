@@ -17,10 +17,10 @@ const orderSchema = mongoose.Schema(
       },
     ],
     shippingAddress: {
-      name: { type: String, required: true }, // CHAMP AJOUTÉ
+      name: { type: String, required: true },
       address: { type: String, required: true },
       city: { type: String, required: true },
-      postalCode: { type: String, required: true },
+      postalCode: { type: String }, // CORRECTION : "required: true" a été enlevé
       country: { type: String, required: true },
       phone: { type: String, required: true },
     },
