@@ -1,7 +1,7 @@
 import express from 'express';
 const router = express.Router();
 import Order from '../models/orderModel.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, admin } from '../middleware/authMiddleware.js';
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -44,26 +44,55 @@ router.post('/', protect, async (req, res) => {
 
 // @desc    Get logged in user orders
 // @route   GET /api/orders/myorders
+// @access  Private
 router.get('/myorders', protect, async (req, res) => {
-    const orders = await Order.find({ user: req.user._id });
-    res.json(orders);
+  const orders = await Order.find({ user: req.user._id });
+  res.json(orders);
 });
 
 // @desc    Get order by ID
 // @route   GET /api/orders/:id
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
-    const order = await Order.findById(req.params.id).populate(
-      'user',
-      'name email'
-    );
-  
-    if (order) {
-      res.json(order);
-    } else {
-      res.status(404);
-      throw new Error('Order not found');
-    }
-  });
+  const order = await Order.findById(req.params.id).populate(
+    'user',
+    'name email'
+  );
+
+  if (order) {
+    res.json(order);
+  } else {
+    res.status(404);
+    throw new Error('Order not found');
+  }
+});
+
+
+// --- ADMIN ROUTES ---
+
+// @desc    Get all orders
+// @route   GET /api/orders
+// @access  Private/Admin
+router.get('/', protect, admin, async (req, res) => {
+  const orders = await Order.find({}).populate('user', 'id name');
+  res.json(orders);
+});
+
+// @desc    Update order to delivered
+// @route   PUT /api/orders/:id/deliver
+// @access  Private/Admin
+router.put('/:id/deliver', protect, admin, async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (order) {
+    order.isDelivered = true;
+    order.deliveredAt = Date.now();
+    const updatedOrder = await order.save();
+    res.json(updatedOrder);
+  } else {
+    res.status(404);
+    throw new Error('Commande non trouvée');
+  }
+});
 
 export default router;
