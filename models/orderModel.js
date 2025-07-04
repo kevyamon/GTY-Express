@@ -20,11 +20,15 @@ const orderSchema = mongoose.Schema(
       name: { type: String, required: true },
       address: { type: String, required: true },
       city: { type: String, required: true },
-      postalCode: { type: String }, // CORRECTION : "required: true" a été enlevé
+      postalCode: { type: String },
       country: { type: String, required: true },
       phone: { type: String, required: true },
     },
     paymentMethod: { type: String, required: true },
+    // AJOUT DES CHAMPS DE PRIX MANQUANTS
+    itemsPrice: { type: Number, required: true, default: 0.0 },
+    taxPrice: { type: Number, required: true, default: 0.0 },
+    shippingPrice: { type: Number, required: true, default: 0.0 },
     totalPrice: { type: Number, required: true, default: 0.0 },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
