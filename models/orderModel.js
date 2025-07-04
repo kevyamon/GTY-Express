@@ -17,14 +17,14 @@ const orderSchema = mongoose.Schema(
       },
     ],
     shippingAddress: {
+      name: { type: String, required: true }, // CHAMP AJOUTÉ
       address: { type: String, required: true },
       city: { type: String, required: true },
       postalCode: { type: String, required: true },
       country: { type: String, required: true },
-      phone: { type: String, required: true }, // CHAMP AJOUTÉ
+      phone: { type: String, required: true },
     },
     paymentMethod: { type: String, required: true },
-    // ... autres champs ...
     totalPrice: { type: Number, required: true, default: 0.0 },
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
