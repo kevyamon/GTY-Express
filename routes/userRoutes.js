@@ -1,7 +1,7 @@
 import express from 'express';
 const router = express.Router();
 import User from '../models/userModel.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 
 const generateToken = (id) => {
@@ -15,7 +15,7 @@ router.post('/login', async (req, res) => {
   const user = await User.findOne({ email });
 
   if (user && (await user.matchPassword(password))) {
-    res.json({
+    res.status(200).json({
       _id: user._id,
       name: user.name,
       email: user.email,
@@ -59,7 +59,7 @@ router.post('/logout', (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 });
 
-// --- NOUVELLES ROUTES POUR LE PROFIL ---
+// --- ROUTES POUR LE PROFIL ---
 
 // @desc    Get user profile
 // @route   GET /api/users/profile
