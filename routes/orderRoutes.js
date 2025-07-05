@@ -3,15 +3,31 @@ const router = express.Router();
 import Order from '../models/orderModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
-// Créer une nouvelle commande
+// @desc    Create new order
+// @route   POST /api/orders
+// @access  Private
 router.post('/', protect, async (req, res) => {
   try {
-    const { orderItems, shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice } = req.body;
+    const {
+      orderItems,
+      shippingAddress,
+      paymentMethod,
+      itemsPrice,
+      taxPrice,
+      shippingPrice,
+      totalPrice,
+    } = req.body;
+
     if (orderItems && orderItems.length === 0) {
       return res.status(400).json({ message: 'Aucun article dans la commande' });
     }
+
     const order = new Order({
-      orderItems: orderItems.map((x) => ({ ...x, product: x._id, _id: undefined })),
+      orderItems: orderItems.map((x) => ({
+        ...x,
+        product: x._id,
+        _id: undefined,
+      })),
       user: req.user._id,
       shippingAddress,
       paymentMethod,
@@ -20,6 +36,7 @@ router.post('/', protect, async (req, res) => {
       shippingPrice,
       totalPrice,
     });
+
     const createdOrder = await order.save();
     res.status(201).json(createdOrder);
   } catch (error) {
@@ -28,21 +45,30 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// Récupérer les commandes de l'utilisateur connecté
+// @desc    Get logged in user orders
+// @route   GET /api/orders/myorders
+// @access  Private
 router.get('/myorders', protect, async (req, res) => {
   const orders = await Order.find({ user: req.user._id });
   res.json(orders);
 });
 
-// Récupérer toutes les commandes (Admin)
+// @desc    Get all orders (ADMIN)
+// @route   GET /api/orders
+// @access  Private/Admin
 router.get('/', protect, admin, async (req, res) => {
   const orders = await Order.find({}).populate('user', 'id name');
   res.json(orders);
 });
 
-// Récupérer une commande par ID
+// @desc    Get order by ID
+// @route   GET /api/orders/:id
+// @access  Private
 router.get('/:id', protect, async (req, res) => {
-  const order = await Order.findById(req.params.id).populate('user', 'name email');
+  const order = await Order.findById(req.params.id).populate(
+    'user',
+    'name email'
+  );
   if (order) {
     res.json(order);
   } else {
@@ -50,7 +76,9 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// Mettre à jour une commande comme "Payée"
+// @desc    Update order to paid
+// @route   PUT /api/orders/:id/pay
+// @access  Private
 router.put('/:id/pay', protect, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -74,7 +102,9 @@ router.put('/:id/pay', protect, async (req, res) => {
   }
 });
 
-// Mettre à jour le statut d'une commande (Admin)
+// @desc    Update order status (ADMIN)
+// @route   PUT /api/orders/:id/status
+// @access  Private/Admin
 router.put('/:id/status', protect, admin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -101,7 +131,9 @@ router.put('/:id/status', protect, admin, async (req, res) => {
   }
 });
 
-// Annuler une commande (Utilisateur)
+// @desc    Cancel an order (USER)
+// @route   PUT /api/orders/:id/cancel
+// @access  Private
 router.put('/:id/cancel', protect, async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (order && order.user.toString() === req.user._id.toString()) {
@@ -110,14 +142,18 @@ router.put('/:id/cancel', protect, async (req, res) => {
       const updatedOrder = await order.save();
       res.json(updatedOrder);
     } else {
-      res.status(400).json({ message: "Impossible d'annuler une commande déjà traitée." });
+      res
+        .status(400)
+        .json({ message: "Impossible d'annuler une commande déjà traitée." });
     }
   } else {
     res.status(404).json({ message: 'Commande non trouvée' });
   }
 });
 
-// Supprimer une commande
+// @desc    Delete an order
+// @route   DELETE /api/orders/:id
+// @access  Private
 router.delete('/:id', protect, async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (order && (req.user.isAdmin || order.user.toString() === req.user._id.toString())) {
