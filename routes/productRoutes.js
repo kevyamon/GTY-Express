@@ -3,24 +3,31 @@ const router = express.Router();
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
-// @desc    Fetch all products OR search by keyword
-// @route   GET /api/products
+// Route modifiée pour gérer les catégories et la recherche
 router.get('/', async (req, res) => {
-  const keyword = req.query.keyword
-    ? {
-        name: {
-          $regex: req.query.keyword,
-          $options: 'i', // 'i' pour insensible à la casse (majuscules/minuscules)
-        },
-      }
-    : {};
+  const { keyword, category } = req.query;
 
-  const products = await Product.find({ ...keyword });
+  const filter = {};
+
+  if (keyword) {
+    filter.name = {
+      $regex: keyword,
+      $options: 'i',
+    };
+  }
+
+  // Logique pour filtrer par catégorie
+  if (category === 'supermarket') {
+    filter.isSupermarket = true;
+  } else {
+    // Par défaut, on n'affiche que les produits qui ne sont PAS de supermarché
+    filter.isSupermarket = { $ne: true };
+  }
+
+  const products = await Product.find({ ...filter });
   res.json(products);
 });
 
-// @desc    Fetch single product
-// @route   GET /api/products/:id
 router.get('/:id', async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (product) {
@@ -30,9 +37,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// @desc    Create a product
-// @route   POST /api/products
-// @access  Private/Admin
 router.post('/', protect, admin, async (req, res) => {
   const product = new Product({
     name: 'Exemple de nom',
@@ -41,16 +45,14 @@ router.post('/', protect, admin, async (req, res) => {
     image: '/images/sample.jpg',
     countInStock: 0,
     description: 'Exemple de description',
+    isSupermarket: false, // Valeur par défaut
   });
   const createdProduct = await product.save();
   res.status(201).json(createdProduct);
 });
 
-// @desc    Update a product
-// @route   PUT /api/products/:id
-// @access  Private/Admin
 router.put('/:id', protect, admin, async (req, res) => {
-    const { name, price, description, image, countInStock, originalPrice } = req.body;
+    const { name, price, description, image, countInStock, originalPrice, isSupermarket } = req.body;
     const product = await Product.findById(req.params.id);
 
     if (product) {
@@ -60,6 +62,7 @@ router.put('/:id', protect, admin, async (req, res) => {
         product.description = description;
         product.image = image;
         product.countInStock = countInStock;
+        product.isSupermarket = isSupermarket; // On sauvegarde la nouvelle valeur
         const updatedProduct = await product.save();
         res.json(updatedProduct);
     } else {
@@ -67,9 +70,6 @@ router.put('/:id', protect, admin, async (req, res) => {
     }
 });
 
-// @desc    Delete a product
-// @route   DELETE /api/products/:id
-// @access  Private/Admin
 router.delete('/:id', protect, admin, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
