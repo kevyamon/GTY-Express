@@ -10,6 +10,8 @@ const generateToken = (id) => {
   });
 };
 
+// @desc    Auth user & get token (Login)
+// @route   POST /api/users/login
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   const user = await User.findOne({ email });
@@ -19,6 +21,7 @@ router.post('/login', async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone, // On renvoie le téléphone
       isAdmin: user.isAdmin,
       token: generateToken(user._id),
     });
@@ -27,22 +30,29 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// @desc    Register a new user
+// @route   POST /api/users/register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
-    if (!name || !email || !password) {
+    const { name, email, password, phone } = req.body;
+    if (!name || !email || !password || !phone) {
       return res.status(400).json({ message: 'Veuillez remplir tous les champs' });
     }
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ message: 'Cet utilisateur existe déjà' });
     }
-    const user = await User.create({ name, email, password });
+    const phoneExists = await User.findOne({ phone });
+    if (phoneExists) {
+        return res.status(400).json({ message: 'Ce numéro de téléphone est déjà utilisé' });
+    }
+    const user = await User.create({ name, email, password, phone });
     if (user) {
       res.status(201).json({
         _id: user._id,
         name: user.name,
         email: user.email,
+        phone: user.phone, // On renvoie le téléphone
         isAdmin: user.isAdmin,
         token: generateToken(user._id),
       });
@@ -55,6 +65,8 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// @desc    Logout user
+// @route   POST /api/users/logout
 router.post('/logout', (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 });
@@ -71,6 +83,7 @@ router.get('/profile', protect, async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone, // On renvoie le téléphone
       isAdmin: user.isAdmin,
     });
   } else {
@@ -86,6 +99,7 @@ router.put('/profile', protect, async (req, res) => {
   if (user) {
     user.name = req.body.name || user.name;
     user.email = req.body.email || user.email;
+    user.phone = req.body.phone || user.phone; // On met à jour le téléphone
     if (req.body.password) {
       user.password = req.body.password;
     }
@@ -94,6 +108,7 @@ router.put('/profile', protect, async (req, res) => {
       _id: updatedUser._id,
       name: updatedUser.name,
       email: updatedUser.email,
+      phone: updatedUser.phone, // On renvoie le téléphone mis à jour
       isAdmin: updatedUser.isAdmin,
       token: generateToken(updatedUser._id),
     });

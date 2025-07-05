@@ -6,6 +6,7 @@ const userSchema = mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
+    phone: { type: String, required: true, unique: true }, // CHAMP AJOUTÉ
     isAdmin: { type: Boolean, required: true, default: false },
   },
   {
@@ -13,7 +14,6 @@ const userSchema = mongoose.Schema(
   }
 );
 
-// Chiffrer le mot de passe avant de sauvegarder l'utilisateur
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) {
     next();
@@ -22,7 +22,6 @@ userSchema.pre('save', async function (next) {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Méthode pour comparer le mot de passe entré avec celui en base de données
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
