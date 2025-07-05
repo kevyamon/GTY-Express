@@ -13,20 +13,24 @@ const generateToken = (id) => {
 // @desc    Auth user & get token (Login)
 // @route   POST /api/users/login
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ email });
+  const { loginIdentifier, password } = req.body;
+  
+  // Le backend cherche un utilisateur dont l'email OU le téléphone correspond
+  const user = await User.findOne({
+    $or: [{ email: loginIdentifier }, { phone: loginIdentifier }],
+  });
 
   if (user && (await user.matchPassword(password))) {
     res.status(200).json({
       _id: user._id,
       name: user.name,
       email: user.email,
-      phone: user.phone, // On renvoie le téléphone
+      phone: user.phone,
       isAdmin: user.isAdmin,
       token: generateToken(user._id),
     });
   } else {
-    res.status(401).json({ message: 'Email ou mot de passe invalide' });
+    res.status(401).json({ message: 'Identifiant ou mot de passe invalide' });
   }
 });
 
@@ -52,7 +56,7 @@ router.post('/register', async (req, res) => {
         _id: user._id,
         name: user.name,
         email: user.email,
-        phone: user.phone, // On renvoie le téléphone
+        phone: user.phone,
         isAdmin: user.isAdmin,
         token: generateToken(user._id),
       });
@@ -71,21 +75,13 @@ router.post('/logout', (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 });
 
-// --- ROUTES POUR LE PROFIL ---
-
 // @desc    Get user profile
 // @route   GET /api/users/profile
 // @access  Private
 router.get('/profile', protect, async (req, res) => {
   const user = await User.findById(req.user._id);
   if (user) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone, // On renvoie le téléphone
-      isAdmin: user.isAdmin,
-    });
+    res.json({ _id: user._id, name: user.name, email: user.email, phone: user.phone });
   } else {
     res.status(404).json({ message: 'Utilisateur non trouvé' });
   }
@@ -99,7 +95,7 @@ router.put('/profile', protect, async (req, res) => {
   if (user) {
     user.name = req.body.name || user.name;
     user.email = req.body.email || user.email;
-    user.phone = req.body.phone || user.phone; // On met à jour le téléphone
+    user.phone = req.body.phone || user.phone;
     if (req.body.password) {
       user.password = req.body.password;
     }
@@ -108,7 +104,7 @@ router.put('/profile', protect, async (req, res) => {
       _id: updatedUser._id,
       name: updatedUser.name,
       email: updatedUser.email,
-      phone: updatedUser.phone, // On renvoie le téléphone mis à jour
+      phone: updatedUser.phone,
       isAdmin: updatedUser.isAdmin,
       token: generateToken(updatedUser._id),
     });
