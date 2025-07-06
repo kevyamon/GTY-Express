@@ -13,6 +13,7 @@ router.post('/', protect, async (req, res) => {
     if (orderItems && orderItems.length === 0) {
       return res.status(400).json({ message: 'Aucun article dans la commande' });
     }
+
     const order = new Order({
       orderItems: orderItems.map((x) => ({ ...x, product: x._id, _id: undefined })),
       user: req.user._id,
@@ -23,16 +24,13 @@ router.post('/', protect, async (req, res) => {
       shippingPrice,
       totalPrice,
     });
+
     const createdOrder = await order.save();
 
-    // On suppose qu'il y a un admin à notifier, ceci est une simplification
-    // Idéalement, on chercherait tous les admins pour leur envoyer une notif.
-    // Pour l'instant, la notification est liée à l'utilisateur qui a créé la commande
-    // mais avec un message destiné à l'admin.
     await Notification.create({
-        user: req.user._id, 
-        message: `Nouvelle commande N°${createdOrder._id.toString().substring(0,8)} passée par ${req.user.name}`,
-        link: `/order/${createdOrder._id}`,
+      user: req.user._id,
+      message: `Nouvelle commande N°${createdOrder._id.toString().substring(0, 8)} passée par ${req.user.name}`,
+      link: `/order/${createdOrder._id}`,
     });
 
     res.status(201).json(createdOrder);
@@ -43,26 +41,18 @@ router.post('/', protect, async (req, res) => {
 });
 
 // @desc    Get logged in user orders
-// @route   GET /api/orders/myorders
-// @access  Private
 router.get('/myorders', protect, async (req, res) => {
   const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
   res.json(orders);
 });
 
 // @desc    Get all orders (ADMIN)
-// @route   GET /api/orders
-// @access  Private/Admin
 router.get('/', protect, admin, async (req, res) => {
   const orders = await Order.find({}).populate('user', 'id name').sort({ createdAt: -1 });
   res.json(orders);
 });
 
-// IMPORTANT : Les routes spécifiques comme '/myorders' ou '/:id/pay' doivent venir AVANT la route générale '/:id'
-
 // @desc    Update order to paid
-// @route   PUT /api/orders/:id/pay
-// @access  Private
 router.put('/:id/pay', protect, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -87,29 +77,39 @@ router.put('/:id/pay', protect, async (req, res) => {
 });
 
 // @desc    Update order status (ADMIN)
-// @route   PUT /api/orders/:id/status
-// @access  Private/Admin
 router.put('/:id/status', protect, admin, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id).populate('user', 'name');
     if (order) {
       const oldStatus = order.status;
+
       if (req.body.status && req.body.status !== oldStatus) {
         order.status = req.body.status;
         if (req.body.status === 'Livrée') {
           order.isDelivered = true;
           order.deliveredAt = Date.now();
         }
+
+        // Notification pour le client
         await Notification.create({
-            user: order.user,
-            message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
-            link: `/order/${order._id}`,
+          user: order.user._id,
+          message: `Le statut de votre commande N°${order._id.toString().substring(0, 8)} est passé à "${req.body.status}"`,
+          link: `/order/${order._id}`,
+        });
+
+        // Notification pour l'admin
+        await Notification.create({
+          user: req.user._id,
+          message: `Vous avez confirmé la commande N°${order._id.toString().substring(0, 8)}`,
+          link: `/order/${order._id}`,
         });
       }
+
       if (req.body.isPaid === true && !order.isPaid) {
         order.isPaid = true;
         order.paidAt = Date.now();
       }
+
       const updatedOrder = await order.save();
       res.json(updatedOrder);
     } else {
@@ -122,44 +122,40 @@ router.put('/:id/status', protect, admin, async (req, res) => {
 });
 
 // @desc    Cancel an order (USER)
-// @route   PUT /api/orders/:id/cancel
-// @access  Private
 router.put('/:id/cancel', protect, async (req, res) => {
-    const order = await Order.findById(req.params.id);
-    if (order && order.user.toString() === req.user._id.toString()) {
-        if (order.status === 'En attente') {
-            order.status = 'Annulée';
-            const updatedOrder = await order.save();
-            await Notification.create({
-                user: order.user, // La notif est pour l'admin, mais on garde le contexte du user
-                message: `Le client ${req.user.name} a annulé la commande N°${order._id.toString().substring(0,8)}`,
-                link: `/order/${order._id}`,
-            });
-            res.json(updatedOrder);
-        } else {
-            res.status(400).json({ message: "Impossible d'annuler une commande déjà traitée." });
-        }
+  const order = await Order.findById(req.params.id).populate('user', 'name');
+  if (order && order.user._id.toString() === req.user._id.toString()) {
+    if (order.status === 'En attente') {
+      order.status = 'Annulée';
+      const updatedOrder = await order.save();
+
+      await Notification.create({
+        user: req.user._id,
+        message: `Vous avez annulé la commande N°${order._id.toString().substring(0, 8)}`,
+        link: `/order/${order._id}`,
+      });
+
+      res.json(updatedOrder);
     } else {
-        res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
+      res.status(400).json({ message: "Impossible d'annuler une commande déjà traitée." });
     }
+  } else {
+    res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
+  }
 });
 
 // @desc    Delete an order
-// @route   DELETE /api/orders/:id
-// @access  Private
 router.delete('/:id', protect, async (req, res) => {
-    const order = await Order.findById(req.params.id);
-    if (order && (req.user.isAdmin || order.user.toString() === req.user._id.toString())) {
-      await order.deleteOne();
-      res.json({ message: 'Commande supprimée' });
-    } else {
-      res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
-    }
+  const order = await Order.findById(req.params.id);
+  if (order && (req.user.isAdmin || order.user.toString() === req.user._id.toString())) {
+    await order.deleteOne();
+    res.json({ message: 'Commande supprimée' });
+  } else {
+    res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
+  }
 });
 
 // @desc    Get order by ID
-// @route   GET /api/orders/:id
-// @access  Private
 router.get('/:id', protect, async (req, res) => {
   const order = await Order.findById(req.params.id).populate('user', 'name email');
   if (order) {

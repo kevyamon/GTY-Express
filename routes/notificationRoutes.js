@@ -1,7 +1,7 @@
 import express from 'express';
 const router = express.Router();
 import Notification from '../models/notificationModel.js';
-import { protect, admin } from '../middleware/authMiddleware.js';
+import { protect } from '../middleware/authMiddleware.js';
 
 // @desc    Get notifications for logged-in user or all for admin
 // @route   GET /api/notifications
@@ -28,30 +28,23 @@ router.put('/mark-as-read', protect, async (req, res) => {
   }
 });
 
-// ✅ NOUVELLE ROUTE : Supprimer une notification par son ID
 // @desc    Delete a specific notification
-// @route   DELETE /api/notifications/:id
+// @route   DELETE /api/notifications/:notificationId
 // @access  Private
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:notificationId', protect, async (req, res) => {
   try {
-    const notification = await Notification.findById(req.params.id);
+    const notification = await Notification.findOne({
+      notificationId: req.params.notificationId,
+      user: req.user._id,
+    });
 
     if (!notification) {
       return res.status(404).json({ message: 'Notification non trouvée' });
     }
 
-    // Vérifie si la notification appartient à l'utilisateur ou si c'est un admin
-    if (
-      !req.user.isAdmin &&
-      notification.user.toString() !== req.user._id.toString()
-    ) {
-      return res.status(401).json({ message: 'Accès non autorisé' });
-    }
-
-    await notification.remove();
+    await notification.deleteOne();
     res.status(200).json({ message: 'Notification supprimée' });
   } catch (error) {
-    console.error('Erreur suppression:', error);
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
