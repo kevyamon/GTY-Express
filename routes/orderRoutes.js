@@ -2,32 +2,19 @@ import express from 'express';
 const router = express.Router();
 import Order from '../models/orderModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
+import Notification from '../models/notificationModel.js';
 
 // @desc    Create new order
 // @route   POST /api/orders
 // @access  Private
 router.post('/', protect, async (req, res) => {
   try {
-    const {
-      orderItems,
-      shippingAddress,
-      paymentMethod,
-      itemsPrice,
-      taxPrice,
-      shippingPrice,
-      totalPrice,
-    } = req.body;
-
+    const { orderItems, shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice } = req.body;
     if (orderItems && orderItems.length === 0) {
       return res.status(400).json({ message: 'Aucun article dans la commande' });
     }
-
     const order = new Order({
-      orderItems: orderItems.map((x) => ({
-        ...x,
-        product: x._id,
-        _id: undefined,
-      })),
+      orderItems: orderItems.map((x) => ({ ...x, product: x._id, _id: undefined })),
       user: req.user._id,
       shippingAddress,
       paymentMethod,
@@ -36,8 +23,18 @@ router.post('/', protect, async (req, res) => {
       shippingPrice,
       totalPrice,
     });
-
     const createdOrder = await order.save();
+
+    // On suppose qu'il y a un admin à notifier, ceci est une simplification
+    // Idéalement, on chercherait tous les admins pour leur envoyer une notif.
+    // Pour l'instant, la notification est liée à l'utilisateur qui a créé la commande
+    // mais avec un message destiné à l'admin.
+    await Notification.create({
+        user: req.user._id, 
+        message: `Nouvelle commande N°${createdOrder._id.toString().substring(0,8)} passée par ${req.user.name}`,
+        link: `/order/${createdOrder._id}`,
+    });
+
     res.status(201).json(createdOrder);
   } catch (error) {
     console.error(error);
@@ -49,7 +46,7 @@ router.post('/', protect, async (req, res) => {
 // @route   GET /api/orders/myorders
 // @access  Private
 router.get('/myorders', protect, async (req, res) => {
-  const orders = await Order.find({ user: req.user._id });
+  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
   res.json(orders);
 });
 
@@ -57,24 +54,11 @@ router.get('/myorders', protect, async (req, res) => {
 // @route   GET /api/orders
 // @access  Private/Admin
 router.get('/', protect, admin, async (req, res) => {
-  const orders = await Order.find({}).populate('user', 'id name');
+  const orders = await Order.find({}).populate('user', 'id name').sort({ createdAt: -1 });
   res.json(orders);
 });
 
-// @desc    Get order by ID
-// @route   GET /api/orders/:id
-// @access  Private
-router.get('/:id', protect, async (req, res) => {
-  const order = await Order.findById(req.params.id).populate(
-    'user',
-    'name email'
-  );
-  if (order) {
-    res.json(order);
-  } else {
-    res.status(404).json({ message: 'Commande non trouvée' });
-  }
-});
+// IMPORTANT : Les routes spécifiques comme '/myorders' ou '/:id/pay' doivent venir AVANT la route générale '/:id'
 
 // @desc    Update order to paid
 // @route   PUT /api/orders/:id/pay
@@ -109,14 +93,20 @@ router.put('/:id/status', protect, admin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (order) {
-      if (req.body.status) {
+      const oldStatus = order.status;
+      if (req.body.status && req.body.status !== oldStatus) {
         order.status = req.body.status;
         if (req.body.status === 'Livrée') {
           order.isDelivered = true;
           order.deliveredAt = Date.now();
         }
+        await Notification.create({
+            user: order.user,
+            message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
+            link: `/order/${order._id}`,
+        });
       }
-      if (req.body.isPaid === true) {
+      if (req.body.isPaid === true && !order.isPaid) {
         order.isPaid = true;
         order.paidAt = Date.now();
       }
@@ -135,20 +125,23 @@ router.put('/:id/status', protect, admin, async (req, res) => {
 // @route   PUT /api/orders/:id/cancel
 // @access  Private
 router.put('/:id/cancel', protect, async (req, res) => {
-  const order = await Order.findById(req.params.id);
-  if (order && order.user.toString() === req.user._id.toString()) {
-    if (order.status === 'En attente') {
-      order.status = 'Annulée';
-      const updatedOrder = await order.save();
-      res.json(updatedOrder);
+    const order = await Order.findById(req.params.id);
+    if (order && order.user.toString() === req.user._id.toString()) {
+        if (order.status === 'En attente') {
+            order.status = 'Annulée';
+            const updatedOrder = await order.save();
+            await Notification.create({
+                user: order.user, // La notif est pour l'admin, mais on garde le contexte du user
+                message: `Le client ${req.user.name} a annulé la commande N°${order._id.toString().substring(0,8)}`,
+                link: `/order/${order._id}`,
+            });
+            res.json(updatedOrder);
+        } else {
+            res.status(400).json({ message: "Impossible d'annuler une commande déjà traitée." });
+        }
     } else {
-      res
-        .status(400)
-        .json({ message: "Impossible d'annuler une commande déjà traitée." });
+        res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
     }
-  } else {
-    res.status(404).json({ message: 'Commande non trouvée' });
-  }
 });
 
 // @desc    Delete an order
@@ -162,6 +155,18 @@ router.delete('/:id', protect, async (req, res) => {
     } else {
       res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
     }
+});
+
+// @desc    Get order by ID
+// @route   GET /api/orders/:id
+// @access  Private
+router.get('/:id', protect, async (req, res) => {
+  const order = await Order.findById(req.params.id).populate('user', 'name email');
+  if (order) {
+    res.json(order);
+  } else {
+    res.status(404).json({ message: 'Commande non trouvée' });
+  }
 });
 
 export default router;
