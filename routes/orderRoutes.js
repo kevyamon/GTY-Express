@@ -3,6 +3,7 @@ const router = express.Router();
 import Order from '../models/orderModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
+import User from '../models/userModel.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // @desc    Create new order
@@ -41,23 +42,24 @@ router.post('/', protect, async (req, res) => {
 
     const createdOrder = await order.save();
 
-    // Création de deux notifications : admin + client (lui-même)
-    const notificationId = uuidv4();
+    // Notification client
+    await Notification.create({
+      user: req.user._id,
+      notificationId: uuidv4(),
+      message: `Votre commande N°${createdOrder._id.toString().substring(0, 8)} a bien été enregistrée.`,
+      link: `/order/${createdOrder._id}`,
+    });
 
-    await Notification.create([
-      {
-        user: req.user._id,
-        notificationId,
-        message: `Votre commande N°${createdOrder._id.toString().substring(0, 8)} a bien été enregistrée.`,
-        link: `/order/${createdOrder._id}`,
-      },
-      {
-        user: 'admin', // Marqueur temporaire, sera filtré côté backend pour tous les admins
+    // Notification admin
+    const adminUser = await User.findOne({ isAdmin: true });
+    if (adminUser) {
+      await Notification.create({
+        user: adminUser._id,
         notificationId: uuidv4(),
         message: `Nouvelle commande N°${createdOrder._id.toString().substring(0, 8)} passée par ${req.user.name}`,
         link: `/order/${createdOrder._id}`,
-      },
-    ]);
+      });
+    }
 
     res.status(201).json(createdOrder);
   } catch (error) {
@@ -128,19 +130,16 @@ router.put('/:id/status', protect, admin, async (req, res) => {
           order.deliveredAt = Date.now();
         }
 
-        const clientNotificationId = uuidv4();
-        const adminNotificationId = uuidv4();
-
         await Notification.create([
           {
             user: order.user._id,
-            notificationId: clientNotificationId,
+            notificationId: uuidv4(),
             message: `Le statut de votre commande N°${order._id.toString().substring(0, 8)} est passé à "${newStatus}"`,
             link: `/order/${order._id}`,
           },
           {
             user: req.user._id,
-            notificationId: adminNotificationId,
+            notificationId: uuidv4(),
             message: `Vous avez confirmé la commande N°${order._id.toString().substring(0, 8)}`,
             link: `/order/${order._id}`,
           },
@@ -173,20 +172,27 @@ router.put('/:id/cancel', protect, async (req, res) => {
       order.status = 'Annulée';
       const updatedOrder = await order.save();
 
-      await Notification.create([
+      const adminUser = await User.findOne({ isAdmin: true });
+
+      const notifs = [
         {
           user: req.user._id,
           notificationId: uuidv4(),
           message: `Vous avez annulé la commande N°${order._id.toString().substring(0, 8)}`,
           link: `/order/${order._id}`,
         },
-        {
-          user: 'admin',
+      ];
+
+      if (adminUser) {
+        notifs.push({
+          user: adminUser._id,
           notificationId: uuidv4(),
           message: `Le client ${req.user.name} a annulé la commande N°${order._id.toString().substring(0, 8)}`,
           link: `/order/${order._id}`,
-        },
-      ]);
+        });
+      }
+
+      await Notification.create(notifs);
 
       res.json(updatedOrder);
     } else {
