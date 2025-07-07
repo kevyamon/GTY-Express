@@ -3,31 +3,39 @@ const router = express.Router();
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
-// Route modifiée pour gérer les catégories et la recherche
+// @desc    Fetch all products OR search by keyword AND/OR filter by category
+// @route   GET /api/products
 router.get('/', async (req, res) => {
-  const { keyword, category } = req.query;
+  try {
+    const { keyword, category } = req.query;
 
-  const filter = {};
+    const filter = {};
 
-  if (keyword) {
-    filter.name = {
-      $regex: keyword,
-      $options: 'i',
-    };
+    if (keyword) {
+      filter.name = {
+        $regex: req.query.keyword,
+        $options: 'i',
+      };
+    }
+
+    // --- LOGIQUE DE FILTRE CORRIGÉE ---
+    if (category === 'supermarket') {
+      filter.isSupermarket = true;
+    } else if (category === 'general') {
+      filter.isSupermarket = { $ne: true };
+    }
+    // Si category === 'all' (ou n'est pas défini), on n'ajoute pas de filtre isSupermarket,
+    // ce qui permet de tout récupérer.
+
+    const products = await Product.find({ ...filter });
+    res.json(products);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur du serveur' });
   }
-
-  // Logique pour filtrer par catégorie
-  if (category === 'supermarket') {
-    filter.isSupermarket = true;
-  } else {
-    // Par défaut, on n'affiche que les produits qui ne sont PAS de supermarché
-    filter.isSupermarket = { $ne: true };
-  }
-
-  const products = await Product.find({ ...filter });
-  res.json(products);
 });
 
+// Le reste du fichier ne change pas
 router.get('/:id', async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (product) {
@@ -45,7 +53,7 @@ router.post('/', protect, admin, async (req, res) => {
     image: '/images/sample.jpg',
     countInStock: 0,
     description: 'Exemple de description',
-    isSupermarket: false, // Valeur par défaut
+    isSupermarket: false,
   });
   const createdProduct = await product.save();
   res.status(201).json(createdProduct);
@@ -62,7 +70,7 @@ router.put('/:id', protect, admin, async (req, res) => {
         product.description = description;
         product.image = image;
         product.countInStock = countInStock;
-        product.isSupermarket = isSupermarket; // On sauvegarde la nouvelle valeur
+        product.isSupermarket = isSupermarket;
         const updatedProduct = await product.save();
         res.json(updatedProduct);
     } else {
