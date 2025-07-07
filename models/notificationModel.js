@@ -1,36 +1,19 @@
 import mongoose from 'mongoose';
-import { v4 as uuidv4 } from 'uuid';
 
 const notificationSchema = mongoose.Schema(
   {
-    notificationId: {
-      type: String,
-      required: true,
-      default: uuidv4,
-      unique: true,
-    },
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
-    message: {
-      type: String,
-      required: true,
-    },
-    isRead: {
-      type: Boolean,
-      required: true,
-      default: false,
-    },
-    link: {
-      type: String,
-    },
+    // CORRECTION : On autorise le champ 'user' à être soit un ID, soit un simple texte.
+    user: { type: mongoose.Schema.Types.Mixed, required: true },
+    notificationId: { type: String, required: true, unique: true },
+    message: { type: String, required: true },
+    isRead: { type: Boolean, default: false },
+    link: { type: String },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
+
+// On ajoute un index pour que la recherche de notifications soit plus rapide.
+notificationSchema.index({ user: 1 });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 export default Notification;
