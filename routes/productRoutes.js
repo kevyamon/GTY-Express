@@ -3,30 +3,21 @@ const router = express.Router();
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
-// @desc    Fetch all products OR search by keyword AND/OR filter by category
-// @route   GET /api/products
 router.get('/', async (req, res) => {
   try {
     const { keyword, category } = req.query;
-
     const filter = {};
-
     if (keyword) {
       filter.name = {
         $regex: req.query.keyword,
         $options: 'i',
       };
     }
-
-    // --- LOGIQUE DE FILTRE CORRIGÉE ---
     if (category === 'supermarket') {
       filter.isSupermarket = true;
     } else if (category === 'general') {
       filter.isSupermarket = { $ne: true };
     }
-    // Si category === 'all' (ou n'est pas défini), on n'ajoute pas de filtre isSupermarket,
-    // ce qui permet de tout récupérer.
-
     const products = await Product.find({ ...filter });
     res.json(products);
   } catch (error) {
@@ -35,7 +26,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Le reste du fichier ne change pas
 router.get('/:id', async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (product) {
@@ -50,7 +40,7 @@ router.post('/', protect, admin, async (req, res) => {
     name: 'Exemple de nom',
     price: 0,
     user: req.user._id,
-    image: '/images/sample.jpg',
+    images: ['/images/sample.jpg'], // Initialise avec une liste d'images
     countInStock: 0,
     description: 'Exemple de description',
     isSupermarket: false,
@@ -60,7 +50,7 @@ router.post('/', protect, admin, async (req, res) => {
 });
 
 router.put('/:id', protect, admin, async (req, res) => {
-    const { name, price, description, image, countInStock, originalPrice, isSupermarket } = req.body;
+    const { name, price, description, images, countInStock, originalPrice, isSupermarket } = req.body;
     const product = await Product.findById(req.params.id);
 
     if (product) {
@@ -68,7 +58,7 @@ router.put('/:id', protect, admin, async (req, res) => {
         product.price = price;
         product.originalPrice = originalPrice;
         product.description = description;
-        product.image = image;
+        product.images = images; // Met à jour la liste d'images
         product.countInStock = countInStock;
         product.isSupermarket = isSupermarket;
         const updatedProduct = await product.save();
