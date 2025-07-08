@@ -6,7 +6,8 @@ const userSchema = mongoose.Schema(
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    phone: { type: String, required: true, unique: true }, // CHAMP AJOUTÉ
+    phone: { type: String, required: true, unique: true },
+    profilePicture: { type: String, default: '' }, // CHAMP AJOUTÉ
     isAdmin: { type: Boolean, required: true, default: false },
   },
   {
