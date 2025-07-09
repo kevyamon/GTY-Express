@@ -1,5 +1,5 @@
 import asyncHandler from '../middleware/asyncHandler.js';
-import Product from '../models/Product.js';
+import Product from '../models/productModel.js'; // CORRECTION ICI
 
 // @desc    Fetch all products
 // @route   GET /api/products
@@ -65,7 +65,6 @@ const updateProduct = asyncHandler(async (req, res) => {
     product.brand = brand;
     product.category = category;
     product.countInStock = countInStock;
-    // --- ON AJOUTE LA LOGIQUE DE MISE À JOUR POUR LES PROMOTIONS ---
     product.isOnPromotion = isOnPromotion;
     product.promotionPrice = promotionPrice;
 
