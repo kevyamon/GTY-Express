@@ -13,20 +13,18 @@ router.get('/', async (req, res) => {
       filter.name = { $regex: keyword, $options: 'i' };
     }
 
-    // --- LOGIQUE DE FILTRAGE SIMPLIFIÉE ET CORRIGÉE ---
-    if (category) {
-      if (category === 'supermarket') {
-        filter.category = 'Supermarché';
-      } else if (category === 'all') {
-        // 'all' est utilisé pour la page admin, pas de filtre de catégorie
-      } else {
-        // Pour toute autre catégorie, on filtre par cette catégorie
-        filter.category = category;
-      }
-    } else {
-      // Comportement par défaut (ex: page /products) : on exclut le Supermarché
+    // --- LOGIQUE DE FILTRAGE CORRIGÉE ---
+    if (category === 'supermarket') {
+      filter.category = 'Supermarché';
+    } else if (category && category !== 'all' && category !== 'general') {
+      // Gère les catégories spécifiques comme "Électronique", "Sports", etc.
+      filter.category = category;
+    } else if (category !== 'all') {
+      // Cas par défaut pour la page principale (/products) qui envoie 'general',
+      // ou si aucune catégorie n'est précisée. On exclut 'Supermarché'.
       filter.category = { $ne: 'Supermarché' };
     }
+    // Si category === 'all', aucun filtre n'est appliqué (pour la page admin).
 
     if (promotion === 'true') {
       filter.promotion = { $exists: true, $ne: null };
