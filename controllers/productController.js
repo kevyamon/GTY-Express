@@ -39,7 +39,7 @@ const createProduct = asyncHandler(async (req, res) => {
     price: 0,
     user: req.user._id,
     image: '/images/sample.jpg',
-    brand: 'Exemple de marque',
+    brand: 'Exemple de marque', // LIGNE AJOUTÉE
     category: 'general',
     countInStock: 0,
     description: 'Exemple de description',
