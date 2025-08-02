@@ -21,6 +21,21 @@ router.post('/', protect, async (req, res) => {
       shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice,
     });
     const createdOrder = await order.save();
+
+    // --- LOGIQUE DE NOTIFICATION AJOUTÉE ICI ---
+    const adminNotification = {
+      notificationId: uuidv4(),
+      user: 'admin', // Cible tous les admins
+      message: `Nouvelle commande N°${createdOrder._id.toString().substring(0,8)} passée par ${req.user.name}`,
+      link: `/admin/orderlist`,
+    };
+    await Notification.create(adminNotification);
+
+    // Émission de l'événement WebSocket à la room 'admin'
+    req.io.to('admin').emit('notification', adminNotification);
+    req.io.to('admin').emit('order_update', { orderId: createdOrder._id });
+    // --- FIN DE LA LOGIQUE AJOUTÉE ---
+
     res.status(201).json(createdOrder);
   } catch (error) {
     console.error(error);
