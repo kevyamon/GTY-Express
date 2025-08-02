@@ -43,18 +43,15 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// @desc    Créer un nouveau produit à partir des données d'un formulaire
+// @route   POST /api/products
+// @access  Private/Admin
 router.post('/', protect, admin, async (req, res) => {
   try {
+    // Le produit est créé avec toutes les données du formulaire (req.body)
     const product = new Product({
-      name: 'Exemple de nom',
-      price: 0,
-      user: req.user._id,
-      // CORRECTION : Utilise une image temporaire publique
-      image: 'https://via.placeholder.com/300x300.png?text=Image+Exemple',
-      images: [],
-      brand: 'Exemple de marque',
-      countInStock: 0,
-      description: 'Exemple de description',
+      ...req.body,
+      user: req.user._id, // On assigne l'admin connecté comme créateur
     });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
@@ -63,6 +60,7 @@ router.post('/', protect, admin, async (req, res) => {
     res.status(500).json({ message: 'Erreur lors de la création du produit' });
   }
 });
+
 
 router.put('/:id', protect, admin, async (req, res) => {
     const { name, price, description, images, countInStock, originalPrice, isSupermarket, promotion } = req.body;
