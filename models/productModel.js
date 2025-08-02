@@ -11,10 +11,15 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // Ajouté pour la compatibilité avec les anciens produits
+    image: {
+      type: String,
+      required: false,
+    },
+    // Le nouveau champ pour gérer plusieurs images
     images: {
       type: [String],
-      required: true,
-      default: ['/images/sample.jpg'],
+      default: [],
     },
     brand: {
       type: String,
