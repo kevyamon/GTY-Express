@@ -44,11 +44,14 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/', protect, admin, async (req, res) => {
-  try { // On ajoute un try-catch pour la stabilité
+  try {
     const product = new Product({
-      name: 'Exemple de nom', price: 0, user: req.user._id,
-      images: ['/images/sample.jpg'], countInStock: 0,
-      description: 'Exemple de description', isSupermarket: false,
+      name: 'Exemple de nom',
+      price: 0,
+      user: req.user._id,
+      brand: 'Exemple de marque',
+      countInStock: 0,
+      description: 'Exemple de description',
     });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);

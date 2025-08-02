@@ -11,18 +11,19 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    image: {
-      type: String,
+    images: {
+      type: [String],
       required: true,
+      default: ['/images/sample.jpg'],
     },
     brand: {
       type: String,
-      required: false, // MODIFIÉ ICI
+      required: false,
     },
     category: {
       type: String,
-      required: true,
-      default: 'general', // 'general' ou 'supermarket'
+      required: false,
+      default: 'general',
     },
     description: {
       type: String,
@@ -33,20 +34,21 @@ const productSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+    originalPrice: {
+      type: Number,
+    },
     countInStock: {
       type: Number,
       required: true,
       default: 0,
     },
-    // --- NOUVEAUX CHAMPS POUR LES PROMOTIONS ---
-    isOnPromotion: {
+    isSupermarket: {
       type: Boolean,
-      required: true,
       default: false,
     },
-    promotionPrice: {
-      type: Number,
-      default: 0,
+    promotion: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Promotion',
     },
   },
   {
