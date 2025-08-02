@@ -4,7 +4,7 @@ import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
-import { v4 as uuidv4 } from 'uuid'; // IMPORTATION AJOUTÉE
+import { v4 as uuidv4 } from 'uuid';
 
 // @desc    Créer une nouvelle commande
 // @route   POST /api/orders
@@ -66,12 +66,18 @@ router.put('/:id/status', protect, admin, async (req, res) => {
             }
           }
         }
-        await Notification.create({
-            notificationId: uuidv4(), // LIGNE AJOUTÉE
+
+        const newNotif = {
+            notificationId: uuidv4(),
             user: order.user,
             message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
             link: `/order/${order._id}`,
-        });
+        };
+        await Notification.create(newNotif);
+
+        // Émission de l'événement WebSocket
+        req.io.to(order.user.toString()).emit('notification', newNotif);
+        req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       }
       if (req.body.isPaid === true && !order.isPaid) {
         order.isPaid = true;
@@ -123,12 +129,18 @@ router.put('/:id/cancel', protect, async (req, res) => {
         if (order.status === 'En attente') {
             order.status = 'Annulée';
             const updatedOrder = await order.save();
-            await Notification.create({
-                notificationId: uuidv4(), // LIGNE AJOUTÉE
+            const newNotif = {
+                notificationId: uuidv4(),
                 user: 'admin', // Cible l'admin
                 message: `Le client ${req.user.name} a annulé la commande N°${order._id.toString().substring(0,8)}`,
                 link: `/admin/orderlist`,
-            });
+            };
+            await Notification.create(newNotif);
+
+            // Émission de l'événement WebSocket à tous les admins
+            req.io.to('admin').emit('notification', newNotif);
+            req.io.to('admin').emit('order_update', { orderId: order._id });
+
             res.json(updatedOrder);
         } else {
             res.status(400).json({ message: "Impossible d'annuler une commande déjà traitée." });
@@ -162,6 +174,5 @@ router.get('/:id', protect, async (req, res) => {
     res.status(404).json({ message: 'Commande non trouvée' });
   }
 });
-
 
 export default router;
