@@ -13,15 +13,18 @@ router.get('/', async (req, res) => {
       filter.name = { $regex: keyword, $options: 'i' };
     }
 
-    // --- LOGIQUE DE FILTRAGE MISE À JOUR ---
+    // --- LOGIQUE DE FILTRAGE SIMPLIFIÉE ET CORRIGÉE ---
     if (category) {
       if (category === 'supermarket') {
-        filter.category = 'Supermarché'; // Filtre sur la nouvelle catégorie
-      } else if (category !== 'all') {
+        filter.category = 'Supermarché';
+      } else if (category === 'all') {
+        // 'all' est utilisé pour la page admin, pas de filtre de catégorie
+      } else {
+        // Pour toute autre catégorie, on filtre par cette catégorie
         filter.category = category;
       }
     } else {
-      // Par défaut, si aucune catégorie n'est spécifiée, on exclut le Supermarché
+      // Comportement par défaut (ex: page /products) : on exclut le Supermarché
       filter.category = { $ne: 'Supermarché' };
     }
 
