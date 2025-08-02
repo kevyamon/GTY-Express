@@ -6,22 +6,25 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 // GET /api/products
 router.get('/', async (req, res) => {
   try {
-    const { keyword, category, promotion } = req.query; // On ajoute la promotion
+    const { keyword, category, promotion } = req.query;
     const filter = {};
 
     if (keyword) {
-      filter.name = { $regex: req.query.keyword, $options: 'i' };
+      filter.name = { $regex: keyword, $options: 'i' };
     }
 
-    if (category === 'supermarket') {
-      filter.isSupermarket = true;
-    } else if (category === 'general') {
-      filter.isSupermarket = { $ne: true };
-      filter.promotion = { $exists: false }; // On exclut les produits en promo
-    } else if (promotion === 'true') {
-      filter.promotion = { $exists: true, $ne: null }; // On ne prend que les produits en promo
+    // --- LOGIQUE DE FILTRAGE AMÉLIORÉE ---
+    if (category) {
+      if (category === 'supermarket') {
+        filter.isSupermarket = true;
+      } else if (category !== 'all') {
+        filter.category = category;
+      }
     }
-    // Si la catégorie est 'all', on n'ajoute pas de filtre isSupermarket
+
+    if (promotion === 'true') {
+      filter.promotion = { $exists: true, $ne: null };
+    }
 
     const products = await Product.find({ ...filter });
     res.json(products);
@@ -43,15 +46,11 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// @desc    Créer un nouveau produit à partir des données d'un formulaire
-// @route   POST /api/products
-// @access  Private/Admin
 router.post('/', protect, admin, async (req, res) => {
   try {
-    // Le produit est créé avec toutes les données du formulaire (req.body)
     const product = new Product({
       ...req.body,
-      user: req.user._id, // On assigne l'admin connecté comme créateur
+      user: req.user._id,
     });
     const createdProduct = await product.save();
     res.status(201).json(createdProduct);
@@ -61,14 +60,19 @@ router.post('/', protect, admin, async (req, res) => {
   }
 });
 
-
 router.put('/:id', protect, admin, async (req, res) => {
-    const { name, price, description, images, countInStock, originalPrice, isSupermarket, promotion } = req.body;
+    const { name, price, description, images, brand, category, countInStock, originalPrice, isSupermarket, promotion } = req.body;
     const product = await Product.findById(req.params.id);
     if (product) {
-        product.name = name; product.price = price; product.originalPrice = originalPrice;
-        product.description = description; product.images = images;
-        product.countInStock = countInStock; product.isSupermarket = isSupermarket;
+        product.name = name;
+        product.price = price;
+        product.description = description;
+        product.images = images;
+        product.brand = brand;
+        product.category = category;
+        product.countInStock = countInStock;
+        product.originalPrice = originalPrice;
+        product.isSupermarket = isSupermarket;
         product.promotion = promotion === '' ? undefined : promotion;
         const updatedProduct = await product.save();
         res.json(updatedProduct);

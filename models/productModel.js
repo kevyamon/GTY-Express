@@ -11,12 +11,6 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // Ajouté pour la compatibilité avec les anciens produits
-    image: {
-      type: String,
-      required: false,
-    },
-    // Le nouveau champ pour gérer plusieurs images
     images: {
       type: [String],
       default: [],
@@ -25,10 +19,20 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
+    // --- MODIFICATION DU CHAMP CATEGORY ---
     category: {
       type: String,
-      required: false,
-      default: 'general',
+      required: true,
+      enum: [
+        'Électronique',
+        'Vêtements et Accessoires',
+        'Sports et Loisirs',
+        'Beauté et Santé',
+        'Maison et Cuisine',
+        'Supermarché',
+        'Autres',
+      ],
+      default: 'Autres',
     },
     description: {
       type: String,
