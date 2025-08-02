@@ -49,6 +49,9 @@ router.post('/', protect, admin, async (req, res) => {
       name: 'Exemple de nom',
       price: 0,
       user: req.user._id,
+      // CORRECTION : Utilise une image temporaire publique
+      image: 'https://via.placeholder.com/300x300.png?text=Image+Exemple',
+      images: [],
       brand: 'Exemple de marque',
       countInStock: 0,
       description: 'Exemple de description',
