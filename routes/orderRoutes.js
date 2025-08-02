@@ -4,6 +4,7 @@ import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
+import { v4 as uuidv4 } from 'uuid'; // IMPORTATION AJOUTÉE
 
 // @desc    Créer une nouvelle commande
 // @route   POST /api/orders
@@ -66,6 +67,7 @@ router.put('/:id/status', protect, admin, async (req, res) => {
           }
         }
         await Notification.create({
+            notificationId: uuidv4(), // LIGNE AJOUTÉE
             user: order.user,
             message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
             link: `/order/${order._id}`,
@@ -122,6 +124,7 @@ router.put('/:id/cancel', protect, async (req, res) => {
             order.status = 'Annulée';
             const updatedOrder = await order.save();
             await Notification.create({
+                notificationId: uuidv4(), // LIGNE AJOUTÉE
                 user: 'admin', // Cible l'admin
                 message: `Le client ${req.user.name} a annulé la commande N°${order._id.toString().substring(0,8)}`,
                 link: `/admin/orderlist`,
