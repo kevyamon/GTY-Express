@@ -13,24 +13,20 @@ router.get('/', async (req, res) => {
       filter.name = { $regex: keyword, $options: 'i' };
     }
 
-    // --- LOGIQUE DE FILTRAGE CORRIGÉE ---
     if (category === 'supermarket') {
       filter.category = 'Supermarché';
     } else if (category && category !== 'all' && category !== 'general') {
-      // Gère les catégories spécifiques comme "Électronique", "Sports", etc.
       filter.category = category;
     } else if (category !== 'all') {
-      // Cas par défaut pour la page principale (/products) qui envoie 'general',
-      // ou si aucune catégorie n'est précisée. On exclut 'Supermarché'.
       filter.category = { $ne: 'Supermarché' };
     }
-    // Si category === 'all', aucun filtre n'est appliqué (pour la page admin).
 
     if (promotion === 'true') {
       filter.promotion = { $exists: true, $ne: null };
     }
 
-    const products = await Product.find({ ...filter });
+    // AJOUT : Trie les produits du plus récent au plus ancien
+    const products = await Product.find({ ...filter }).sort({ createdAt: -1 });
     res.json(products);
   } catch (error) {
     res.status(500).json({ message: 'Erreur du serveur' });

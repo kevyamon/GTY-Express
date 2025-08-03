@@ -21,21 +21,15 @@ router.post('/', protect, async (req, res) => {
       shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice,
     });
     const createdOrder = await order.save();
-
-    // --- LOGIQUE DE NOTIFICATION AJOUTÉE ICI ---
     const adminNotification = {
       notificationId: uuidv4(),
-      user: 'admin', // Cible tous les admins
+      user: 'admin',
       message: `Nouvelle commande N°${createdOrder._id.toString().substring(0,8)} passée par ${req.user.name}`,
       link: `/admin/orderlist`,
     };
     await Notification.create(adminNotification);
-
-    // Émission de l'événement WebSocket à la room 'admin'
     req.io.to('admin').emit('notification', adminNotification);
     req.io.to('admin').emit('order_update', { orderId: createdOrder._id });
-    // --- FIN DE LA LOGIQUE AJOUTÉE ---
-
     res.status(201).json(createdOrder);
   } catch (error) {
     console.error(error);
@@ -69,9 +63,9 @@ router.put('/:id/status', protect, admin, async (req, res) => {
       const oldStatus = order.status;
       if (req.body.status && req.body.status !== oldStatus) {
         order.status = req.body.status;
-        if (req.body.status === 'Livrée') {
-          order.isDelivered = true;
-          order.deliveredAt = Date.now();
+
+        // --- LOGIQUE DE DÉDUCTION DE STOCK DÉPLACÉE ICI ---
+        if (req.body.status === 'Confirmée') {
           // Déduction du stock
           for (const item of order.orderItems) {
             const product = await Product.findById(item.product);
@@ -82,6 +76,11 @@ router.put('/:id/status', protect, admin, async (req, res) => {
           }
         }
 
+        if (req.body.status === 'Livrée') {
+          order.isDelivered = true;
+          order.deliveredAt = Date.now();
+        }
+
         const newNotif = {
             notificationId: uuidv4(),
             user: order.user,
@@ -89,8 +88,6 @@ router.put('/:id/status', protect, admin, async (req, res) => {
             link: `/order/${order._id}`,
         };
         await Notification.create(newNotif);
-
-        // Émission de l'événement WebSocket
         req.io.to(order.user.toString()).emit('notification', newNotif);
         req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       }
@@ -146,16 +143,13 @@ router.put('/:id/cancel', protect, async (req, res) => {
             const updatedOrder = await order.save();
             const newNotif = {
                 notificationId: uuidv4(),
-                user: 'admin', // Cible l'admin
+                user: 'admin',
                 message: `Le client ${req.user.name} a annulé la commande N°${order._id.toString().substring(0,8)}`,
                 link: `/admin/orderlist`,
             };
             await Notification.create(newNotif);
-
-            // Émission de l'événement WebSocket à tous les admins
             req.io.to('admin').emit('notification', newNotif);
             req.io.to('admin').emit('order_update', { orderId: order._id });
-
             res.json(updatedOrder);
         } else {
             res.status(400).json({ message: "Impossible d'annuler une commande déjà traitée." });
