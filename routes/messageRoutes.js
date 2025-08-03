@@ -11,24 +11,31 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
-    const { recipientId, text } = req.body;
+    let { recipientId, text } = req.body;
     const senderId = req.user._id;
 
     let conversation;
+
+    // Si l'utilisateur est un client, on trouve ou crée la conversation avec un admin
     if (!req.user.isAdmin) {
-      const adminUser = await User.findOne({ isAdmin: true });
-      if (!adminUser) return res.status(404).json({ message: 'Aucun administrateur trouvé.' });
+      // Si le client n'a pas de destinataire spécifié (premier message), on trouve un admin
+      if (!recipientId) {
+        const adminUser = await User.findOne({ isAdmin: true });
+        if (!adminUser) return res.status(404).json({ message: 'Aucun administrateur disponible.' });
+        recipientId = adminUser._id;
+      }
 
       conversation = await Conversation.findOne({
-        participants: { $all: [senderId, adminUser._id] },
+        participants: { $all: [senderId, recipientId] },
       });
 
       if (!conversation) {
         conversation = new Conversation({
-          participants: [senderId, adminUser._id],
+          participants: [senderId, recipientId],
         });
       }
-    } else {
+    } else { // Si l'expéditeur est un admin
+        if (!recipientId) return res.status(400).json({ message: 'Aucun destinataire spécifié.'});
         conversation = await Conversation.findOne({
             participants: { $all: [senderId, recipientId] },
         });
@@ -46,15 +53,14 @@ router.post('/send', protect, async (req, res) => {
     conversation.lastMessage = { 
       text, 
       sender: senderId,
-      // Seul l'expéditeur a lu le message au moment de l'envoi
       readBy: [senderId],
     };
     await conversation.save();
 
     await newMessage.populate('sender', 'name profilePicture');
 
-    const recipient = conversation.participants.find(p => p.toString() !== senderId.toString());
-    req.io.to(recipient.toString()).emit('newMessage', newMessage);
+    const recipientSocketId = conversation.participants.find(p => p.toString() !== senderId.toString());
+    req.io.to(recipientSocketId.toString()).emit('newMessage', newMessage);
 
     res.status(201).json(newMessage);
   } catch (error) {
@@ -63,6 +69,7 @@ router.post('/send', protect, async (req, res) => {
   }
 });
 
+// ... (le reste du fichier reste identique)
 // @desc    Récupérer toutes les conversations avec le statut "non lu"
 // @route   GET /api/messages
 // @access  Private
@@ -70,19 +77,15 @@ router.get('/', protect, async (req, res) => {
     try {
         const userId = req.user._id;
         let conversations;
-
         if(req.user.isAdmin) {
             conversations = await Conversation.find().populate('participants', 'name profilePicture').sort({ updatedAt: -1 });
         } else {
             conversations = await Conversation.find({ participants: userId }).populate('participants', 'name profilePicture').sort({ updatedAt: -1 });
         }
-
-        // On ajoute un champ "isUnread" à chaque conversation pour le frontend
         const conversationsWithStatus = conversations.map(convo => {
           const isUnread = convo.lastMessage && !convo.lastMessage.readBy.includes(userId);
           return { ...convo.toObject(), isUnread };
         });
-
         res.json(conversationsWithStatus);
     } catch (error) {
         res.status(500).json({ message: 'Erreur du serveur' });
@@ -114,8 +117,6 @@ router.post('/read/:conversationId', protect, async (req, res) => {
       if (!conversation.lastMessage.readBy.includes(userId)) {
         conversation.lastMessage.readBy.push(userId);
         await conversation.save();
-
-        // Notifier l'utilisateur en temps réel que le compteur doit être mis à jour
         req.io.to(userId.toString()).emit('conversationRead', { conversationId: conversation._id });
       }
     }
