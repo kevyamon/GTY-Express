@@ -6,57 +6,44 @@ import User from '../models/userModel.js';
 
 const router = express.Router();
 
-// @desc    Envoyer un message
-// @route   POST /api/messages/send
-// @access  Private
+// ... (les routes /send, /, /:conversationId, et /read/:conversationId restent inchangées)
 router.post('/send', protect, async (req, res) => {
   try {
-    let { recipientId, text, image } = req.body; // On récupère l'image ici
+    let { recipientId, text, image } = req.body;
     const senderId = req.user._id;
-
     if (!text && !image) {
-      return res.status(400).json({ message: "Le message ne peut pas être vide."});
+        return res.status(400).json({ message: "Le message ne peut pas être vide."});
     }
-
     let conversation;
-
-    // Si l'utilisateur est un client, on trouve ou crée la conversation avec un admin
     if (!req.user.isAdmin) {
-      // Si le client n'a pas de destinataire spécifié (premier message), on trouve un admin
       if (!recipientId) {
         const adminUser = await User.findOne({ isAdmin: true });
         if (!adminUser) return res.status(404).json({ message: 'Aucun administrateur disponible.' });
         recipientId = adminUser._id;
       }
-
       conversation = await Conversation.findOne({
         participants: { $all: [senderId, recipientId] },
       });
-
       if (!conversation) {
         conversation = new Conversation({
           participants: [senderId, recipientId],
         });
       }
-    } else { // Si l'expéditeur est un admin
+    } else {
         if (!recipientId) return res.status(400).json({ message: 'Aucun destinataire spécifié.'});
         conversation = await Conversation.findOne({
             participants: { $all: [senderId, recipientId] },
         });
         if (!conversation) return res.status(404).json({ message: "Conversation introuvable."});
     }
-
     const newMessage = new Message({
       conversationId: conversation._id,
       sender: senderId,
       text,
-      image, // On ajoute l'image au nouveau message
+      image,
     });
-
     await newMessage.save();
     conversation.messages.push(newMessage._id);
-
-    // Le lastMessage affiche "Photo" si c'est une image, sinon le texte
     const lastMessageText = image ? "📷 Photo" : text;
     conversation.lastMessage = { 
       text: lastMessageText, 
@@ -64,12 +51,9 @@ router.post('/send', protect, async (req, res) => {
       readBy: [senderId],
     };
     await conversation.save();
-
     await newMessage.populate('sender', 'name profilePicture');
-
     const recipientSocketId = conversation.participants.find(p => p.toString() !== senderId.toString());
     req.io.to(recipientSocketId.toString()).emit('newMessage', newMessage);
-
     res.status(201).json(newMessage);
   } catch (error) {
     console.error(error);
@@ -77,9 +61,6 @@ router.post('/send', protect, async (req, res) => {
   }
 });
 
-// @desc    Récupérer toutes les conversations avec le statut "non lu"
-// @route   GET /api/messages
-// @access  Private
 router.get('/', protect, async (req, res) => {
     try {
         const userId = req.user._id;
@@ -99,9 +80,6 @@ router.get('/', protect, async (req, res) => {
     }
 });
 
-// @desc    Récupérer les messages d'une conversation
-// @route   GET /api/messages/:conversationId
-// @access  Private
 router.get('/:conversationId', protect, async (req, res) => {
   try {
     const messages = await Message.find({
@@ -113,9 +91,6 @@ router.get('/:conversationId', protect, async (req, res) => {
   }
 });
 
-// @desc    Marquer une conversation comme lue
-// @route   POST /api/messages/read/:conversationId
-// @access  Private
 router.post('/read/:conversationId', protect, async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.conversationId);
@@ -132,5 +107,39 @@ router.post('/read/:conversationId', protect, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
+
+
+// @desc    Supprimer un message
+// @route   DELETE /api/messages/:messageId
+// @access  Private
+router.delete('/:messageId', protect, async (req, res) => {
+  try {
+    const message = await Message.findById(req.params.messageId);
+    if (!message) {
+      return res.status(404).json({ message: 'Message non trouvé' });
+    }
+    // On vérifie que l'utilisateur est bien l'expéditeur du message
+    if (message.sender.toString() !== req.user._id.toString()) {
+      return res.status(401).json({ message: 'Action non autorisée' });
+    }
+
+    const conversation = await Conversation.findById(message.conversationId);
+    await message.deleteOne();
+
+    // On notifie les participants en temps réel
+    conversation.participants.forEach(participant => {
+        req.io.to(participant.toString()).emit('messageDeleted', { 
+            messageId: req.params.messageId,
+            conversationId: message.conversationId 
+        });
+    });
+
+    res.json({ message: 'Message supprimé' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur du serveur' });
+  }
+});
+
 
 export default router;
