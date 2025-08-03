@@ -60,9 +60,6 @@ router.put('/users/:id/status', protect, admin, async (req, res) => {
     }
 });
 
-// @desc    Changer le rôle d'un utilisateur (admin/client)
-// @route   PUT /api/admin/users/:id/role
-// @access  Private/Admin
 router.put('/users/:id/role', protect, admin, async (req, res) => {
     try {
         const { isAdmin } = req.body;
@@ -72,7 +69,6 @@ router.put('/users/:id/role', protect, admin, async (req, res) => {
             return res.status(404).json({ message: 'Utilisateur non trouvé' });
         }
 
-        // On vérifie aussi ici pour le Super Admin
         if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
             return res.status(403).json({ message: 'Le rôle du Super Admin ne peut pas être modifié.' });
         }
@@ -89,6 +85,37 @@ router.get('/complaints', protect, admin, async (req, res) => {
     try {
         const complaints = await Complaint.find({}).populate('user', 'name email').sort({ createdAt: -1 });
         res.json(complaints);
+    } catch (error) {
+        res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+
+// @desc    Supprimer une réclamation
+// @route   DELETE /api/admin/complaints/:id
+// @access  Private/Admin
+router.delete('/complaints/:id', protect, admin, async (req, res) => {
+    try {
+        const complaint = await Complaint.findById(req.params.id);
+        if (complaint) {
+            await complaint.deleteOne();
+            req.io.to('admin').emit('complaint_update');
+            res.json({ message: 'Réclamation supprimée' });
+        } else {
+            res.status(404).json({ message: 'Réclamation non trouvée' });
+        }
+    } catch (error) {
+        res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+
+// @desc    Supprimer toutes les réclamations
+// @route   DELETE /api/admin/complaints
+// @access  Private/Admin
+router.delete('/complaints', protect, admin, async (req, res) => {
+    try {
+        await Complaint.deleteMany({});
+        req.io.to('admin').emit('complaint_update');
+        res.json({ message: 'Toutes les réclamations ont été supprimées' });
     } catch (error) {
         res.status(500).json({ message: 'Erreur du serveur' });
     }
