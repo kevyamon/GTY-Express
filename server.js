@@ -18,8 +18,8 @@ import notificationRoutes from './routes/notificationRoutes.js';
 import promotionRoutes from './routes/promotionRoutes.js';
 import promoBannerRoutes from './routes/promoBannerRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
-import adminRoutes from './routes/adminRoutes.js'; // NOUVEL IMPORT
-import complaintRoutes from './routes/complaintRoutes.js'; // NOUVEL IMPORT
+import adminRoutes from './routes/adminRoutes.js';
+import complaintRoutes from './routes/complaintRoutes.js';
 
 const port = process.env.PORT || 5000;
 
@@ -55,16 +55,18 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/promotions', promotionRoutes);
 app.use('/api/promobanner', promoBannerRoutes);
 app.use('/api/messages', messageRoutes);
-app.use('/api/admin', adminRoutes); // NOUVELLE ROUTE
-app.use('/api/complaints', complaintRoutes); // NOUVELLE ROUTE
+app.use('/api/admin', adminRoutes);
+app.use('/api/complaints', complaintRoutes);
 
-// Logique de connexion Socket.IO
+// --- LOGIQUE DE CONNEXION SOCKET.IO CORRIGÉE ---
 io.on('connection', (socket) => {
-  const userId = socket.handshake.query.userId;
-  if (userId) {
-    socket.join(userId);
-    console.log(`L'utilisateur ${userId} a rejoint sa room`);
-  }
+  console.log('Un client est connecté:', socket.id);
+
+  // On écoute l'événement 'joinRoom' envoyé par le client
+  socket.on('joinRoom', (room) => {
+    socket.join(room);
+    console.log(`Un utilisateur a rejoint la room: ${room}`);
+  });
 
   socket.on('disconnect', () => {
     console.log('Un client est déconnecté:', socket.id);
