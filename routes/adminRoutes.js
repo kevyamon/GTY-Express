@@ -2,11 +2,12 @@ import express from 'express';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import User from '../models/userModel.js';
 import Complaint from '../models/complaintModel.js';
+import Notification from '../models/notificationModel.js'; // NOUVEL IMPORT
+import { v4 as uuidv4 } from 'uuid'; // NOUVEL IMPORT
 import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-// Fonction pour générer un token qui inclut le statut de l'utilisateur
 const generateTokenWithStatus = (id, status) => {
     return jwt.sign({ id, status }, process.env.JWT_SECRET, {
       expiresIn: '30d',
@@ -31,25 +32,44 @@ router.get('/users', protect, admin, async (req, res) => {
 router.put('/users/:id/status', protect, admin, async (req, res) => {
     try {
         const { status } = req.body;
-        const user = await User.findById(req.params.id);
+        const userToModify = await User.findById(req.params.id);
 
-        if (user) {
-            user.status = status;
-            await user.save();
-
-            // Générer un nouveau token avec le statut mis à jour
-            const newToken = generateTokenWithStatus(user._id, user.status);
-
-            // Envoyer un signal WebSocket à l'utilisateur concerné
-            req.io.to(user._id.toString()).emit('status_update', {
-                status: user.status,
-                token: newToken, // Envoyer le nouveau token
-            });
-
-            res.json({ message: 'Statut mis à jour', user });
-        } else {
-            res.status(404).json({ message: 'Utilisateur non trouvé' });
+        if (!userToModify) {
+            return res.status(404).json({ message: 'Utilisateur non trouvé' });
         }
+
+        // --- LOGIQUE DE PROTECTION DU SUPER ADMIN ---
+        if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
+            // Un admin essaie de bannir le Super Admin
+            const tryingAdmin = req.user; // L'admin qui fait la requête
+            const superAdmin = await User.findOne({ email: process.env.SUPER_ADMIN_EMAIL });
+
+            // Créer une notification pour le Super Admin
+            const newNotif = {
+                notificationId: uuidv4(),
+                user: superAdmin._id,
+                message: `ALERTE SÉCURITÉ : L'admin ${tryingAdmin.name} (${tryingAdmin.email}) a tenté de bannir votre compte.`,
+                link: '/admin/userlist',
+            };
+            await Notification.create(newNotif);
+            req.io.to(superAdmin._id.toString()).emit('notification', newNotif);
+
+            return res.status(403).json({ message: 'Action non autorisée. Le Super Admin ne peut pas être modifié.' });
+        }
+        // --- FIN DE LA LOGIQUE DE PROTECTION ---
+
+        userToModify.status = status;
+        await userToModify.save();
+
+        const newToken = generateTokenWithStatus(userToModify._id, userToModify.status);
+
+        req.io.to(userToModify._id.toString()).emit('status_update', {
+            status: userToModify.status,
+            token: newToken,
+        });
+
+        res.json({ message: 'Statut mis à jour', user: userToModify });
+
     } catch (error) {
         res.status(500).json({ message: 'Erreur du serveur' });
     }
