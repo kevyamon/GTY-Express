@@ -2,8 +2,8 @@ import express from 'express';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import User from '../models/userModel.js';
 import Complaint from '../models/complaintModel.js';
-import Notification from '../models/notificationModel.js'; // NOUVEL IMPORT
-import { v4 as uuidv4 } from 'uuid'; // NOUVEL IMPORT
+import Notification from '../models/notificationModel.js';
+import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 
 const router = express.Router();
@@ -14,9 +14,6 @@ const generateTokenWithStatus = (id, status) => {
     });
 };
 
-// @desc    Récupérer tous les utilisateurs
-// @route   GET /api/admin/users
-// @access  Private/Admin
 router.get('/users', protect, admin, async (req, res) => {
     try {
         const users = await User.find({}).sort({ createdAt: -1 });
@@ -26,9 +23,6 @@ router.get('/users', protect, admin, async (req, res) => {
     }
 });
 
-// @desc    Changer le statut d'un utilisateur (bannir/activer)
-// @route   PUT /api/admin/users/:id/status
-// @access  Private/Admin
 router.put('/users/:id/status', protect, admin, async (req, res) => {
     try {
         const { status } = req.body;
@@ -38,36 +32,27 @@ router.put('/users/:id/status', protect, admin, async (req, res) => {
             return res.status(404).json({ message: 'Utilisateur non trouvé' });
         }
 
-        // --- LOGIQUE DE PROTECTION DU SUPER ADMIN ---
         if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
-            // Un admin essaie de bannir le Super Admin
-            const tryingAdmin = req.user; // L'admin qui fait la requête
+            const tryingAdmin = req.user;
             const superAdmin = await User.findOne({ email: process.env.SUPER_ADMIN_EMAIL });
-
-            // Créer une notification pour le Super Admin
             const newNotif = {
                 notificationId: uuidv4(),
                 user: superAdmin._id,
-                message: `ALERTE SÉCURITÉ : L'admin ${tryingAdmin.name} (${tryingAdmin.email}) a tenté de bannir votre compte.`,
+                message: `ALERTE SÉCURITÉ : L'admin ${tryingAdmin.name} (${tryingAdmin.email}) a tenté de modifier votre compte.`,
                 link: '/admin/userlist',
             };
             await Notification.create(newNotif);
             req.io.to(superAdmin._id.toString()).emit('notification', newNotif);
-
             return res.status(403).json({ message: 'Action non autorisée. Le Super Admin ne peut pas être modifié.' });
         }
-        // --- FIN DE LA LOGIQUE DE PROTECTION ---
 
         userToModify.status = status;
         await userToModify.save();
-
         const newToken = generateTokenWithStatus(userToModify._id, userToModify.status);
-
         req.io.to(userToModify._id.toString()).emit('status_update', {
             status: userToModify.status,
             token: newToken,
         });
-
         res.json({ message: 'Statut mis à jour', user: userToModify });
 
     } catch (error) {
@@ -75,9 +60,31 @@ router.put('/users/:id/status', protect, admin, async (req, res) => {
     }
 });
 
-// @desc    Récupérer toutes les réclamations
-// @route   GET /api/admin/complaints
+// @desc    Changer le rôle d'un utilisateur (admin/client)
+// @route   PUT /api/admin/users/:id/role
 // @access  Private/Admin
+router.put('/users/:id/role', protect, admin, async (req, res) => {
+    try {
+        const { isAdmin } = req.body;
+        const userToModify = await User.findById(req.params.id);
+
+        if (!userToModify) {
+            return res.status(404).json({ message: 'Utilisateur non trouvé' });
+        }
+
+        // On vérifie aussi ici pour le Super Admin
+        if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
+            return res.status(403).json({ message: 'Le rôle du Super Admin ne peut pas être modifié.' });
+        }
+
+        userToModify.isAdmin = isAdmin;
+        await userToModify.save();
+        res.json({ message: 'Rôle mis à jour', user: userToModify });
+    } catch (error) {
+        res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+
 router.get('/complaints', protect, admin, async (req, res) => {
     try {
         const complaints = await Complaint.find({}).populate('user', 'name email').sort({ createdAt: -1 });
