@@ -16,7 +16,8 @@ import orderRoutes from './routes/orderRoutes.js';
 import configRoutes from './routes/configRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import promotionRoutes from './routes/promotionRoutes.js';
-import promoBannerRoutes from './routes/promoBannerRoutes.js'; // NOUVEL IMPORT
+import promoBannerRoutes from './routes/promoBannerRoutes.js';
+import messageRoutes from './routes/messageRoutes.js'; // NOUVEL IMPORT
 
 const port = process.env.PORT || 5000;
 
@@ -50,16 +51,17 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/promotions', promotionRoutes);
-app.use('/api/promobanner', promoBannerRoutes); // NOUVELLE ROUTE
+app.use('/api/promobanner', promoBannerRoutes);
+app.use('/api/messages', messageRoutes); // NOUVELLE ROUTE
 
 // Logique de connexion Socket.IO
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
-
-  socket.on('joinRoom', (userId) => {
+  const userId = socket.handshake.query.userId;
+  if (userId) {
     socket.join(userId);
     console.log(`L'utilisateur ${userId} a rejoint sa room`);
-  });
+  }
 
   socket.on('disconnect', () => {
     console.log('Un client est déconnecté:', socket.id);
