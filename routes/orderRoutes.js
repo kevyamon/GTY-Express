@@ -64,14 +64,15 @@ router.put('/:id/status', protect, admin, async (req, res) => {
       if (req.body.status && req.body.status !== oldStatus) {
         order.status = req.body.status;
 
-        // --- LOGIQUE DE DÉDUCTION DE STOCK DÉPLACÉE ICI ---
+        // --- LOGIQUE DE DÉDUCTION DE STOCK ET NOTIFICATION ---
         if (req.body.status === 'Confirmée') {
-          // Déduction du stock
           for (const item of order.orderItems) {
             const product = await Product.findById(item.product);
             if (product) {
               product.countInStock -= item.qty;
               await product.save();
+              // Émission de l'événement de mise à jour du produit à tous les clients
+              req.io.emit('product_update', { productId: product._id });
             }
           }
         }

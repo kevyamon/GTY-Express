@@ -3,7 +3,7 @@ const router = express.Router();
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
-// GET /api/products
+// ... (la route GET / reste inchangée)
 router.get('/', async (req, res) => {
   try {
     const { keyword, category, promotion } = req.query;
@@ -25,7 +25,6 @@ router.get('/', async (req, res) => {
       filter.promotion = { $exists: true, $ne: null };
     }
 
-    // AJOUT : Trie les produits du plus récent au plus ancien
     const products = await Product.find({ ...filter }).sort({ createdAt: -1 });
     res.json(products);
   } catch (error) {
@@ -33,6 +32,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ... (la route GET /:id reste inchangée)
 router.get('/:id', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -46,6 +46,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// ... (la route POST / reste inchangée)
 router.post('/', protect, admin, async (req, res) => {
   try {
     const product = new Product({
@@ -59,6 +60,7 @@ router.post('/', protect, admin, async (req, res) => {
     res.status(500).json({ message: 'Erreur lors de la création du produit' });
   }
 });
+
 
 router.put('/:id', protect, admin, async (req, res) => {
     const { name, price, description, images, brand, category, countInStock, originalPrice, isSupermarket, promotion } = req.body;
@@ -75,12 +77,17 @@ router.put('/:id', protect, admin, async (req, res) => {
         product.isSupermarket = isSupermarket;
         product.promotion = promotion === '' ? undefined : promotion;
         const updatedProduct = await product.save();
+
+        // Émission de l'événement de mise à jour du produit
+        req.io.emit('product_update', { productId: product._id });
+
         res.json(updatedProduct);
     } else {
         res.status(404).json({ message: 'Produit non trouvé' });
     }
 });
 
+// ... (la route DELETE /:id reste inchangée)
 router.delete('/:id', protect, admin, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
