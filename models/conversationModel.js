@@ -18,6 +18,8 @@ const conversationSchema = mongoose.Schema(
     lastMessage: {
       text: String,
       sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      // On ajoute un tableau pour savoir qui a lu le message
+      readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     },
   },
   {
