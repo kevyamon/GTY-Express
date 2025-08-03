@@ -6,7 +6,7 @@ import User from '../models/userModel.js';
 
 const router = express.Router();
 
-// ... (les routes /send, /, /:conversationId, et /read/:conversationId restent inchangées)
+// ... (Les routes /send, /, /:conversationId, /read/:conversationId, et put/:messageId restent inchangées)
 router.post('/send', protect, async (req, res) => {
   try {
     let { recipientId, text, image } = req.body;
@@ -104,6 +104,10 @@ router.post('/read/:conversationId', protect, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
+
+// @desc    Supprimer un message (logique de suppression douce)
+// @route   DELETE /api/messages/:messageId
+// @access  Private
 router.delete('/:messageId', protect, async (req, res) => {
   try {
     const message = await Message.findById(req.params.messageId);
@@ -113,14 +117,19 @@ router.delete('/:messageId', protect, async (req, res) => {
     if (message.sender.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
+
+    // On ne supprime pas, on modifie le contenu
+    message.text = "Ce message a été supprimé";
+    message.image = undefined; // On supprime l'image
+    await message.save();
+
     const conversation = await Conversation.findById(message.conversationId);
-    await message.deleteOne();
+
+    // On notifie les participants en temps réel que le message a été "modifié" (supprimé)
     conversation.participants.forEach(participant => {
-        req.io.to(participant.toString()).emit('messageDeleted', { 
-            messageId: req.params.messageId,
-            conversationId: message.conversationId 
-        });
+        req.io.to(participant.toString()).emit('messageEdited', message);
     });
+
     res.json({ message: 'Message supprimé' });
   } catch (error) {
     console.error(error);
@@ -128,40 +137,29 @@ router.delete('/:messageId', protect, async (req, res) => {
   }
 });
 
-// @desc    Modifier un message
-// @route   PUT /api/messages/:messageId
-// @access  Private
 router.put('/:messageId', protect, async (req, res) => {
   try {
     const { text } = req.body;
     const message = await Message.findById(req.params.messageId);
-
     if (!message) {
       return res.status(404).json({ message: 'Message non trouvé' });
     }
     if (message.sender.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
-
     message.text = text;
     message.isEdited = true;
     await message.save();
-
-    // On peuple le message avec les infos du sender pour le temps réel
     await message.populate('sender', 'name profilePicture');
-
     const conversation = await Conversation.findById(message.conversationId);
-    // On notifie les participants en temps réel
     conversation.participants.forEach(participant => {
         req.io.to(participant.toString()).emit('messageEdited', message);
     });
-
     res.json(message);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
-
 
 export default router;
