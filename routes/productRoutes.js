@@ -3,7 +3,7 @@ const router = express.Router();
 import Product from '../models/productModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
-// GET /api/products
+// ... (la route GET / reste inchangée)
 router.get('/', async (req, res) => {
   try {
     const { keyword, category, promotion } = req.query;
@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/products/:id
+// ... (la route GET /:id reste inchangée)
 router.get('/:id', async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
@@ -46,7 +46,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/products
+// ... (la route POST / reste inchangée)
 router.post('/', protect, admin, async (req, res) => {
   try {
     const product = new Product({
@@ -61,7 +61,7 @@ router.post('/', protect, admin, async (req, res) => {
   }
 });
 
-// PUT /api/products/:id
+
 router.put('/:id', protect, admin, async (req, res) => {
     const { name, price, description, images, brand, category, countInStock, originalPrice, isSupermarket, promotion } = req.body;
     const product = await Product.findById(req.params.id);
@@ -87,7 +87,7 @@ router.put('/:id', protect, admin, async (req, res) => {
     }
 });
 
-// DELETE /api/products/:id
+// ... (la route DELETE /:id reste inchangée)
 router.delete('/:id', protect, admin, async (req, res) => {
     const product = await Product.findById(req.params.id);
     if (product) {
