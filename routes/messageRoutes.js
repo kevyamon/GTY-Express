@@ -11,8 +11,12 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
-    let { recipientId, text } = req.body;
+    let { recipientId, text, image } = req.body; // On récupère l'image ici
     const senderId = req.user._id;
+
+    if (!text && !image) {
+      return res.status(400).json({ message: "Le message ne peut pas être vide."});
+    }
 
     let conversation;
 
@@ -46,12 +50,16 @@ router.post('/send', protect, async (req, res) => {
       conversationId: conversation._id,
       sender: senderId,
       text,
+      image, // On ajoute l'image au nouveau message
     });
 
     await newMessage.save();
     conversation.messages.push(newMessage._id);
+
+    // Le lastMessage affiche "Photo" si c'est une image, sinon le texte
+    const lastMessageText = image ? "📷 Photo" : text;
     conversation.lastMessage = { 
-      text, 
+      text: lastMessageText, 
       sender: senderId,
       readBy: [senderId],
     };
@@ -69,7 +77,6 @@ router.post('/send', protect, async (req, res) => {
   }
 });
 
-// ... (le reste du fichier reste identique)
 // @desc    Récupérer toutes les conversations avec le statut "non lu"
 // @route   GET /api/messages
 // @access  Private

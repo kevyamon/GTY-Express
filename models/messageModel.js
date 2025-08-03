@@ -12,7 +12,9 @@ const messageSchema = mongoose.Schema(
     },
     text: {
       type: String,
-      required: true,
+    },
+    image: { // CHAMP AJOUTÉ
+      type: String, 
     },
     isRead: {
       type: Boolean,
