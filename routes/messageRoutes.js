@@ -60,7 +60,6 @@ router.post('/send', protect, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
-
 router.get('/', protect, async (req, res) => {
     try {
         const userId = req.user._id;
@@ -79,7 +78,6 @@ router.get('/', protect, async (req, res) => {
         res.status(500).json({ message: 'Erreur du serveur' });
     }
 });
-
 router.get('/:conversationId', protect, async (req, res) => {
   try {
     const messages = await Message.find({
@@ -90,7 +88,6 @@ router.get('/:conversationId', protect, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
-
 router.post('/read/:conversationId', protect, async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.conversationId);
@@ -107,34 +104,59 @@ router.post('/read/:conversationId', protect, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
-
-
-// @desc    Supprimer un message
-// @route   DELETE /api/messages/:messageId
-// @access  Private
 router.delete('/:messageId', protect, async (req, res) => {
   try {
     const message = await Message.findById(req.params.messageId);
     if (!message) {
       return res.status(404).json({ message: 'Message non trouvé' });
     }
-    // On vérifie que l'utilisateur est bien l'expéditeur du message
     if (message.sender.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
-
     const conversation = await Conversation.findById(message.conversationId);
     await message.deleteOne();
-
-    // On notifie les participants en temps réel
     conversation.participants.forEach(participant => {
         req.io.to(participant.toString()).emit('messageDeleted', { 
             messageId: req.params.messageId,
             conversationId: message.conversationId 
         });
     });
-
     res.json({ message: 'Message supprimé' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur du serveur' });
+  }
+});
+
+// @desc    Modifier un message
+// @route   PUT /api/messages/:messageId
+// @access  Private
+router.put('/:messageId', protect, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const message = await Message.findById(req.params.messageId);
+
+    if (!message) {
+      return res.status(404).json({ message: 'Message non trouvé' });
+    }
+    if (message.sender.toString() !== req.user._id.toString()) {
+      return res.status(401).json({ message: 'Action non autorisée' });
+    }
+
+    message.text = text;
+    message.isEdited = true;
+    await message.save();
+
+    // On peuple le message avec les infos du sender pour le temps réel
+    await message.populate('sender', 'name profilePicture');
+
+    const conversation = await Conversation.findById(message.conversationId);
+    // On notifie les participants en temps réel
+    conversation.participants.forEach(participant => {
+        req.io.to(participant.toString()).emit('messageEdited', message);
+    });
+
+    res.json(message);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Erreur du serveur' });

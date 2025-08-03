@@ -13,13 +13,17 @@ const messageSchema = mongoose.Schema(
     text: {
       type: String,
     },
-    image: { // CHAMP AJOUTÉ
+    image: {
       type: String, 
     },
     isRead: {
       type: Boolean,
       default: false,
     },
+    isEdited: { // CHAMP AJOUTÉ
+      type: Boolean,
+      default: false,
+    }
   },
   {
     timestamps: true,
