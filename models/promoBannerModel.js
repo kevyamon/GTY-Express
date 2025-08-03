@@ -18,6 +18,10 @@ const promoBannerSchema = mongoose.Schema(
       required: true,
     },
     coupons: [couponSchema],
+    images: { // CHAMP AJOUTÉ
+      type: [String],
+      default: [],
+    },
     isActive: {
       type: Boolean,
       required: true,

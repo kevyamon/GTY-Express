@@ -32,13 +32,14 @@ router.get('/', protect, admin, async (req, res) => {
 // @access  Private/Admin
 router.post('/', protect, admin, async (req, res) => {
   try {
+    // Si une nouvelle bannière est créée, on désactive les anciennes
     await PromoBanner.updateMany({}, { isActive: false });
+
     const banner = new PromoBanner({
-      ...req.body,
+      ...req.body, // req.body contiendra maintenant aussi les images
       isActive: true,
     });
     const createdBanner = await banner.save();
-    // On envoie le signal de mise à jour à tout le monde
     req.io.emit('banner_update');
     res.status(201).json(createdBanner);
   } catch (error) {
@@ -54,7 +55,6 @@ router.delete('/:id', protect, admin, async (req, res) => {
         const banner = await PromoBanner.findById(req.params.id);
         if (banner) {
           await banner.deleteOne();
-          // On envoie le signal de mise à jour à tout le monde
           req.io.emit('banner_update');
           res.json({ message: 'Bannière supprimée' });
         } else {
