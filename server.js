@@ -17,7 +17,9 @@ import configRoutes from './routes/configRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import promotionRoutes from './routes/promotionRoutes.js';
 import promoBannerRoutes from './routes/promoBannerRoutes.js';
-import messageRoutes from './routes/messageRoutes.js'; // NOUVEL IMPORT
+import messageRoutes from './routes/messageRoutes.js';
+import adminRoutes from './routes/adminRoutes.js'; // NOUVEL IMPORT
+import complaintRoutes from './routes/complaintRoutes.js'; // NOUVEL IMPORT
 
 const port = process.env.PORT || 5000;
 
@@ -52,11 +54,12 @@ app.use('/api/config', configRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/promotions', promotionRoutes);
 app.use('/api/promobanner', promoBannerRoutes);
-app.use('/api/messages', messageRoutes); // NOUVELLE ROUTE
+app.use('/api/messages', messageRoutes);
+app.use('/api/admin', adminRoutes); // NOUVELLE ROUTE
+app.use('/api/complaints', complaintRoutes); // NOUVELLE ROUTE
 
 // Logique de connexion Socket.IO
 io.on('connection', (socket) => {
-  console.log('Un client est connecté:', socket.id);
   const userId = socket.handshake.query.userId;
   if (userId) {
     socket.join(userId);
@@ -68,7 +71,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Route de base pour vérifier que l'API est en ligne
 app.get('/', (req, res) => {
   res.send('L\'API GTY Express est en cours d\'exécution...');
 });

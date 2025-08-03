@@ -4,8 +4,9 @@ import User from '../models/userModel.js';
 import { protect } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
+// MODIFIÉ POUR INCLURE LE STATUT
+const generateToken = (id, status) => {
+  return jwt.sign({ id, status }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
@@ -17,8 +18,9 @@ const sendUserResponse = (res, user, statusCode = 200) => {
         email: user.email,
         phone: user.phone,
         isAdmin: user.isAdmin,
+        status: user.status, // On envoie le statut
         profilePicture: user.profilePicture,
-        token: generateToken(user._id),
+        token: generateToken(user._id, user.status), // On passe le statut au token
       });
 };
 

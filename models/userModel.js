@@ -7,8 +7,15 @@ const userSchema = mongoose.Schema(
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     phone: { type: String, required: true, unique: true },
-    profilePicture: { type: String, default: '' }, // CHAMP AJOUTÉ
+    profilePicture: { type: String, default: '' },
     isAdmin: { type: Boolean, required: true, default: false },
+    // CHAMP AJOUTÉ POUR GÉRER LE STATUT DU COMPTE
+    status: {
+      type: String,
+      required: true,
+      enum: ['active', 'banned'],
+      default: 'active',
+    },
   },
   {
     timestamps: true,
