@@ -6,7 +6,7 @@ import User from '../models/userModel.js';
 
 const router = express.Router();
 
-// ... (Les routes /send, /, /:conversationId, /read/:conversationId, et put/:messageId restent inchangées)
+// ... (Les routes /send, /, /:conversationId restent inchangées)
 router.post('/send', protect, async (req, res) => {
   try {
     let { recipientId, text, image } = req.body;
@@ -88,6 +88,10 @@ router.get('/:conversationId', protect, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
+
+// @desc    Marquer une conversation unique comme lue
+// @route   POST /api/messages/read/:conversationId
+// @access  Private
 router.post('/read/:conversationId', protect, async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.conversationId);
@@ -105,9 +109,27 @@ router.post('/read/:conversationId', protect, async (req, res) => {
   }
 });
 
-// @desc    Supprimer un message (logique de suppression douce)
-// @route   DELETE /api/messages/:messageId
+// @desc    Marquer TOUTES les conversations comme lues
+// @route   POST /api/messages/read-all
 // @access  Private
+router.post('/read-all', protect, async (req, res) => {
+    try {
+      const userId = req.user._id;
+      await Conversation.updateMany(
+        { 
+          participants: userId,
+          'lastMessage.readBy': { $ne: userId } 
+        },
+        { $addToSet: { 'lastMessage.readBy': userId } }
+      );
+
+      req.io.to(userId.toString()).emit('allConversationsRead');
+      res.status(200).json({ message: 'Toutes les conversations ont été marquées comme lues.' });
+    } catch (error) {
+      res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+
 router.delete('/:messageId', protect, async (req, res) => {
   try {
     const message = await Message.findById(req.params.messageId);
@@ -117,26 +139,19 @@ router.delete('/:messageId', protect, async (req, res) => {
     if (message.sender.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
-
-    // On ne supprime pas, on modifie le contenu
     message.text = "Ce message a été supprimé";
-    message.image = undefined; // On supprime l'image
+    message.image = undefined;
     await message.save();
-
     const conversation = await Conversation.findById(message.conversationId);
-
-    // On notifie les participants en temps réel que le message a été "modifié" (supprimé)
     conversation.participants.forEach(participant => {
         req.io.to(participant.toString()).emit('messageEdited', message);
     });
-
     res.json({ message: 'Message supprimé' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
-
 router.put('/:messageId', protect, async (req, res) => {
   try {
     const { text } = req.body;
