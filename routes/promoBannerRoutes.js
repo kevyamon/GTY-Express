@@ -33,9 +33,7 @@ router.get('/', protect, admin, async (req, res) => {
 router.post('/', protect, admin, async (req, res) => {
   try {
     await PromoBanner.updateMany({}, { isActive: false });
-
     const { animatedTexts, endDate, coupons, floatingImages } = req.body;
-
     const banner = new PromoBanner({
       animatedTexts,
       endDate,
@@ -43,14 +41,39 @@ router.post('/', protect, admin, async (req, res) => {
       floatingImages,
       isActive: true,
     });
-
     const createdBanner = await banner.save();
     req.io.emit('banner_update');
     res.status(201).json(createdBanner);
   } catch (error) {
-    console.error(error); // Ajout d'un log pour un meilleur débogage
+    console.error(error);
     res.status(400).json({ message: 'Données invalides' });
   }
+});
+
+// @desc    Mettre à jour une bannière
+// @route   PUT /api/promobanner/:id
+// @access  Private/Admin
+router.put('/:id', protect, admin, async (req, res) => {
+    try {
+      const { animatedTexts, endDate, coupons, floatingImages } = req.body;
+      const banner = await PromoBanner.findById(req.params.id);
+
+      if (banner) {
+        banner.animatedTexts = animatedTexts;
+        banner.endDate = endDate;
+        banner.coupons = coupons;
+        banner.floatingImages = floatingImages;
+
+        const updatedBanner = await banner.save();
+        req.io.emit('banner_update');
+        res.json(updatedBanner);
+      } else {
+        res.status(404).json({ message: 'Bannière non trouvée' });
+      }
+    } catch (error) {
+      console.error(error);
+      res.status(400).json({ message: 'Données invalides' });
+    }
 });
 
 // @desc    Supprimer une bannière
