@@ -9,7 +9,6 @@ import http from 'http';
 dotenv.config();
 import connectDB from './config/db.js';
 
-// On importe toutes nos routes
 import productRoutes from './routes/productRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
@@ -40,13 +39,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Les routes de l'API
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
