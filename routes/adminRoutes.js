@@ -60,6 +60,9 @@ router.put('/users/:id/status', protect, admin, async (req, res) => {
     }
 });
 
+// @desc    Changer le rôle d'un utilisateur (admin/client)
+// @route   PUT /api/admin/users/:id/role
+// @access  Private/Admin
 router.put('/users/:id/role', protect, admin, async (req, res) => {
     try {
         const { isAdmin } = req.body;
@@ -74,8 +77,30 @@ router.put('/users/:id/role', protect, admin, async (req, res) => {
         }
 
         userToModify.isAdmin = isAdmin;
-        await userToModify.save();
-        res.json({ message: 'Rôle mis à jour', user: userToModify });
+        const updatedUser = await userToModify.save();
+
+        // --- LOGIQUE DE NOTIFICATION AJOUTÉE ---
+        const message = isAdmin 
+            ? `Félicitations ! Vous avez été promu au rang d'Administrateur.`
+            : `Votre statut d'Administrateur a été révoqué.`;
+
+        // 1. Notification pour la cloche
+        const newNotif = {
+            notificationId: uuidv4(),
+            user: updatedUser._id,
+            message: message,
+            link: '/admin/userlist', // Un lien pertinent
+        };
+        await Notification.create(newNotif);
+        req.io.to(updatedUser._id.toString()).emit('notification', newNotif);
+
+        // 2. Signal pour la mise à jour du rôle en temps réel
+        req.io.to(updatedUser._id.toString()).emit('role_update', {
+            isAdmin: updatedUser.isAdmin,
+            message: message, // On envoie le message pour le toast
+        });
+
+        res.json({ message: 'Rôle mis à jour', user: updatedUser });
     } catch (error) {
         res.status(500).json({ message: 'Erreur du serveur' });
     }
@@ -90,9 +115,6 @@ router.get('/complaints', protect, admin, async (req, res) => {
     }
 });
 
-// @desc    Supprimer une réclamation
-// @route   DELETE /api/admin/complaints/:id
-// @access  Private/Admin
 router.delete('/complaints/:id', protect, admin, async (req, res) => {
     try {
         const complaint = await Complaint.findById(req.params.id);
@@ -108,9 +130,6 @@ router.delete('/complaints/:id', protect, admin, async (req, res) => {
     }
 });
 
-// @desc    Supprimer toutes les réclamations
-// @route   DELETE /api/admin/complaints
-// @access  Private/Admin
 router.delete('/complaints', protect, admin, async (req, res) => {
     try {
         await Complaint.deleteMany({});
