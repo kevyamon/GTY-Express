@@ -11,11 +11,11 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
-    let { recipientId, text, fileUrl, fileName, fileType } = req.body; // MODIFIÉ ICI pour les fichiers
+    let { recipientId, text, image } = req.body;
     const senderId = req.user._id;
 
-    if (!text && !fileUrl) { // MODIFIÉ ICI
-      return res.status(400).json({ message: "Le message ne peut pas être vide."});
+    if (!text && !image) {
+        return res.status(400).json({ message: "Le message ne peut pas être vide."});
     }
 
     let conversation;
@@ -46,17 +46,13 @@ router.post('/send', protect, async (req, res) => {
       conversationId: conversation._id,
       sender: senderId,
       text,
-      fileUrl, // On utilise les nouveaux champs
-      fileName,
-      fileType,
+      image,
       seenBy: [senderId],
     });
 
     await newMessage.save();
     conversation.messages.push(newMessage._id);
-
-    // Le lastMessage affiche "Fichier" si c'est un fichier, sinon le texte
-    const lastMessageText = fileUrl ? `📎 ${fileName || 'Fichier'}` : text;
+    const lastMessageText = image ? "📷 Photo" : text;
     conversation.lastMessage = { 
       text: lastMessageText, 
       sender: senderId,
@@ -132,7 +128,26 @@ router.post('/read/:conversationId', protect, async (req, res) => {
   }
 });
 
-// @desc    Marquer les messages d'une conversation comme "vus"
+// NOUVELLE ROUTE POUR MARQUER TOUT COMME LU
+// @desc    Marquer toutes les conversations comme lues
+// @route   POST /api/messages/read-all
+// @access  Private
+router.post('/read-all', protect, async (req, res) => {
+    try {
+      const userId = req.user._id;
+      await Conversation.updateMany(
+        { participants: userId, 'lastMessage.readBy': { $ne: userId } },
+        { $addToSet: { 'lastMessage.readBy': userId } }
+      );
+
+      req.io.to(userId.toString()).emit('allConversationsRead');
+      res.status(200).json({ message: 'Toutes les conversations ont été marquées comme lues.' });
+    } catch (error) {
+      res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+
+// @desc    Marquer les messages comme "vus"
 // @route   POST /api/messages/seen/:conversationId
 // @access  Private
 router.post('/seen/:conversationId', protect, async (req, res) => {
@@ -142,17 +157,14 @@ router.post('/seen/:conversationId', protect, async (req, res) => {
             { conversationId: req.params.conversationId, seenBy: { $ne: userId } },
             { $addToSet: { seenBy: userId } }
         );
-
         const conversation = await Conversation.findById(req.params.conversationId);
         const recipientSocketId = conversation.participants.find(p => p.toString() !== userId.toString());
         req.io.to(recipientSocketId.toString()).emit('messagesSeen', { conversationId: req.params.conversationId });
-
         res.status(200).json({ message: 'Messages marqués comme vus.' });
     } catch (error) {
         res.status(500).json({ message: 'Erreur du serveur' });
     }
 });
-
 
 // @desc    Supprimer un message
 // @route   DELETE /api/messages/:messageId
@@ -167,9 +179,7 @@ router.delete('/:messageId', protect, async (req, res) => {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
     message.text = "Ce message a été supprimé";
-    message.fileUrl = undefined; // On utilise le nouveau nom de champ
-    message.fileName = undefined;
-    message.fileType = undefined;
+    message.image = undefined;
     await message.save();
 
     const conversation = await Conversation.findById(message.conversationId);
@@ -191,25 +201,20 @@ router.put('/:messageId', protect, async (req, res) => {
   try {
     const { text } = req.body;
     const message = await Message.findById(req.params.messageId);
-
     if (!message) {
       return res.status(404).json({ message: 'Message non trouvé' });
     }
     if (message.sender.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
-
     message.text = text;
     message.isEdited = true;
     await message.save();
-
     await message.populate('sender', 'name profilePicture');
-
     const conversation = await Conversation.findById(message.conversationId);
     conversation.participants.forEach(participant => {
         req.io.to(participant.toString()).emit('messageEdited', message);
     });
-
     res.json(message);
   } catch (error) {
     console.error(error);
