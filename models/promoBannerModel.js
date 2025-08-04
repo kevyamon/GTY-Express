@@ -6,22 +6,27 @@ const couponSchema = mongoose.Schema({
   code: { type: String, required: true },
 });
 
+// NOUVEAU : Schéma pour les textes animés
+const animatedTextSchema = mongoose.Schema({
+    text: { type: String, required: true },
+});
+
+// NOUVEAU : Schéma pour les images flottantes
+const floatingImageSchema = mongoose.Schema({
+    url: { type: String, required: true },
+});
+
 const promoBannerSchema = mongoose.Schema(
   {
-    mainOfferText: {
-      type: String,
-      required: true,
-      default: "Jusqu'à -60%",
-    },
+    // On remplace le texte unique par un tableau de textes
+    animatedTexts: [animatedTextSchema], 
     endDate: {
       type: Date,
       required: true,
     },
     coupons: [couponSchema],
-    images: { // CHAMP AJOUTÉ
-      type: [String],
-      default: [],
-    },
+    // On ajoute le tableau pour les images flottantes
+    floatingImages: [floatingImageSchema],
     isActive: {
       type: Boolean,
       required: true,

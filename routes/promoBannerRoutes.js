@@ -32,17 +32,23 @@ router.get('/', protect, admin, async (req, res) => {
 // @access  Private/Admin
 router.post('/', protect, admin, async (req, res) => {
   try {
-    // Si une nouvelle bannière est créée, on désactive les anciennes
     await PromoBanner.updateMany({}, { isActive: false });
 
+    const { animatedTexts, endDate, coupons, floatingImages } = req.body;
+
     const banner = new PromoBanner({
-      ...req.body, // req.body contiendra maintenant aussi les images
+      animatedTexts,
+      endDate,
+      coupons,
+      floatingImages,
       isActive: true,
     });
+
     const createdBanner = await banner.save();
     req.io.emit('banner_update');
     res.status(201).json(createdBanner);
   } catch (error) {
+    console.error(error); // Ajout d'un log pour un meilleur débogage
     res.status(400).json({ message: 'Données invalides' });
   }
 });
