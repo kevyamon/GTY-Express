@@ -11,11 +11,11 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
-    let { recipientId, text, image } = req.body;
+    let { recipientId, text, files } = req.body; // Accepte un tableau de fichiers
     const senderId = req.user._id;
 
-    if (!text && !image) {
-        return res.status(400).json({ message: "Le message ne peut pas être vide."});
+    if (!text && (!files || files.length === 0)) {
+      return res.status(400).json({ message: "Le message ne peut pas être vide."});
     }
 
     let conversation;
@@ -46,13 +46,22 @@ router.post('/send', protect, async (req, res) => {
       conversationId: conversation._id,
       sender: senderId,
       text,
-      image,
+      files: files || [],
       seenBy: [senderId],
     });
 
     await newMessage.save();
     conversation.messages.push(newMessage._id);
-    const lastMessageText = image ? "📷 Photo" : text;
+
+    let lastMessageText = text;
+    if (files && files.length > 0) {
+        if (files[0].fileType === 'image') {
+            lastMessageText = text ? `📷 Photo et texte` : `📷 ${files.length} Photo(s)`;
+        } else {
+            lastMessageText = text ? `📎 Fichier et texte` : `📎 ${files.length} Fichier(s)`;
+        }
+    }
+
     conversation.lastMessage = { 
       text: lastMessageText, 
       sender: senderId,
@@ -128,7 +137,6 @@ router.post('/read/:conversationId', protect, async (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE POUR MARQUER TOUT COMME LU
 // @desc    Marquer toutes les conversations comme lues
 // @route   POST /api/messages/read-all
 // @access  Private
@@ -179,7 +187,7 @@ router.delete('/:messageId', protect, async (req, res) => {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
     message.text = "Ce message a été supprimé";
-    message.image = undefined;
+    message.files = []; // On vide le tableau de fichiers
     await message.save();
 
     const conversation = await Conversation.findById(message.conversationId);
@@ -201,20 +209,25 @@ router.put('/:messageId', protect, async (req, res) => {
   try {
     const { text } = req.body;
     const message = await Message.findById(req.params.messageId);
+
     if (!message) {
       return res.status(404).json({ message: 'Message non trouvé' });
     }
     if (message.sender.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
+
     message.text = text;
     message.isEdited = true;
     await message.save();
+
     await message.populate('sender', 'name profilePicture');
+
     const conversation = await Conversation.findById(message.conversationId);
     conversation.participants.forEach(participant => {
         req.io.to(participant.toString()).emit('messageEdited', message);
     });
+
     res.json(message);
   } catch (error) {
     console.error(error);

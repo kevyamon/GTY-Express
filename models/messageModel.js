@@ -1,5 +1,12 @@
 import mongoose from 'mongoose';
 
+// NOUVEAU : Schéma pour un fichier unique
+const fileSchema = mongoose.Schema({
+    fileUrl: { type: String, required: true },
+    fileName: { type: String, required: true },
+    fileType: { type: String, required: true },
+});
+
 const messageSchema = mongoose.Schema(
   {
     conversationId: {
@@ -13,16 +20,8 @@ const messageSchema = mongoose.Schema(
     text: {
       type: String,
     },
-    // Le champ 'image' est renommé et on ajoute des champs pour les fichiers
-    fileUrl: {
-      type: String, 
-    },
-    fileName: {
-      type: String,
-    },
-    fileType: {
-      type: String,
-    },
+    // On remplace les anciens champs par un tableau de fichiers
+    files: [fileSchema],
     isRead: {
       type: Boolean,
       default: false,
@@ -41,9 +40,7 @@ const messageSchema = mongoose.Schema(
   }
 );
 
-// On supprime l'ancien modèle 'Message' s'il existe pour éviter une erreur lors du redémarrage
 delete mongoose.connection.models['Message'];
-
 const Message = mongoose.model('Message', messageSchema);
 
 export default Message;
