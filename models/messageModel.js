@@ -13,10 +13,17 @@ const messageSchema = mongoose.Schema(
     text: {
       type: String,
     },
-    image: {
+    // Le champ 'image' est renommé et on ajoute des champs pour les fichiers
+    fileUrl: {
       type: String, 
     },
-    isRead: { // Ce champ sera bientôt remplacé par seenBy, mais on le garde pour la compatibilité
+    fileName: {
+      type: String,
+    },
+    fileType: {
+      type: String,
+    },
+    isRead: {
       type: Boolean,
       default: false,
     },
@@ -24,7 +31,6 @@ const messageSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    // NOUVEAU CHAMP POUR LE DOUBLE CHECK ✔️
     seenBy: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
@@ -34,6 +40,9 @@ const messageSchema = mongoose.Schema(
     timestamps: true,
   }
 );
+
+// On supprime l'ancien modèle 'Message' s'il existe pour éviter une erreur lors du redémarrage
+delete mongoose.connection.models['Message'];
 
 const Message = mongoose.model('Message', messageSchema);
 

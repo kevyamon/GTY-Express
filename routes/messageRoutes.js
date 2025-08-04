@@ -11,11 +11,11 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
-    let { recipientId, text, image } = req.body;
+    let { recipientId, text, fileUrl, fileName, fileType } = req.body; // MODIFIÉ ICI pour les fichiers
     const senderId = req.user._id;
 
-    if (!text && !image) {
-        return res.status(400).json({ message: "Le message ne peut pas être vide."});
+    if (!text && !fileUrl) { // MODIFIÉ ICI
+      return res.status(400).json({ message: "Le message ne peut pas être vide."});
     }
 
     let conversation;
@@ -46,13 +46,17 @@ router.post('/send', protect, async (req, res) => {
       conversationId: conversation._id,
       sender: senderId,
       text,
-      image,
-      seenBy: [senderId], // L'expéditeur a "vu" le message par défaut
+      fileUrl, // On utilise les nouveaux champs
+      fileName,
+      fileType,
+      seenBy: [senderId],
     });
 
     await newMessage.save();
     conversation.messages.push(newMessage._id);
-    const lastMessageText = image ? "📷 Photo" : text;
+
+    // Le lastMessage affiche "Fichier" si c'est un fichier, sinon le texte
+    const lastMessageText = fileUrl ? `📎 ${fileName || 'Fichier'}` : text;
     conversation.lastMessage = { 
       text: lastMessageText, 
       sender: senderId,
@@ -163,7 +167,9 @@ router.delete('/:messageId', protect, async (req, res) => {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
     message.text = "Ce message a été supprimé";
-    message.image = undefined;
+    message.fileUrl = undefined; // On utilise le nouveau nom de champ
+    message.fileName = undefined;
+    message.fileType = undefined;
     await message.save();
 
     const conversation = await Conversation.findById(message.conversationId);
