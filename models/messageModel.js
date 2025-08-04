@@ -16,14 +16,19 @@ const messageSchema = mongoose.Schema(
     image: {
       type: String, 
     },
-    isRead: {
+    isRead: { // Ce champ sera bientôt remplacé par seenBy, mais on le garde pour la compatibilité
       type: Boolean,
       default: false,
     },
-    isEdited: { // CHAMP AJOUTÉ
+    isEdited: {
       type: Boolean,
       default: false,
-    }
+    },
+    // NOUVEAU CHAMP POUR LE DOUBLE CHECK ✔️
+    seenBy: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }]
   },
   {
     timestamps: true,
