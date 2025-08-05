@@ -77,12 +77,9 @@ router.put('/:id/status', protect, admin, async (req, res) => {
             link: `/order/${order._id}`,
         };
         await Notification.create(newNotif);
-        // On notifie le client
         req.io.to(order.user.toString()).emit('notification', newNotif);
         req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
-        // ON NOTIFIE L'ADMIN AUSSI
         req.io.to('admin').emit('order_update', { orderId: order._id });
-
       }
       if (req.body.isPaid === true && !order.isPaid) {
         order.isPaid = true;
@@ -99,6 +96,9 @@ router.put('/:id/status', protect, admin, async (req, res) => {
   }
 });
 
+// @desc    Mettre à jour une commande comme "Payée"
+// @route   PUT /api/orders/:id/pay
+// @access  Private
 router.put('/:id/pay', protect, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -106,15 +106,24 @@ router.put('/:id/pay', protect, async (req, res) => {
       order.isPaid = true;
       order.paidAt = Date.now();
       order.paymentResult = {
-        id: req.body.id, status: req.body.status, update_time: req.body.update_time,
+        id: req.body.id,
+        status: req.body.status,
+        update_time: req.body.update_time,
         email_address: req.body.payer ? req.body.payer.email_address : 'N/A',
       };
       const updatedOrder = await order.save();
+
+      // --- SIGNAL TEMPS RÉEL AJOUTÉ ICI ---
+      // Notifier le client et les admins que la commande a été mise à jour
+      req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
+      req.io.to('admin').emit('order_update', { orderId: order._id });
+
       res.json(updatedOrder);
     } else {
       res.status(404).json({ message: 'Commande non trouvée' });
     }
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: 'Erreur du serveur lors du paiement' });
   }
 });
