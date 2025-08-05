@@ -11,15 +11,12 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
-    let { recipientId, text, files } = req.body; // Accepte un tableau de fichiers
+    let { recipientId, text, image } = req.body;
     const senderId = req.user._id;
-
-    if (!text && (!files || files.length === 0)) {
-      return res.status(400).json({ message: "Le message ne peut pas être vide."});
+    if (!text && !image) {
+        return res.status(400).json({ message: "Le message ne peut pas être vide."});
     }
-
     let conversation;
-
     if (!req.user.isAdmin) {
       if (!recipientId) {
         const adminUser = await User.findOne({ isAdmin: true });
@@ -41,39 +38,25 @@ router.post('/send', protect, async (req, res) => {
         });
         if (!conversation) return res.status(404).json({ message: "Conversation introuvable."});
     }
-
     const newMessage = new Message({
       conversationId: conversation._id,
       sender: senderId,
       text,
-      files: files || [],
-      seenBy: [senderId],
+      image,
+      seenBy: [senderId], // L'expéditeur a "vu" le message par défaut
     });
-
     await newMessage.save();
     conversation.messages.push(newMessage._id);
-
-    let lastMessageText = text;
-    if (files && files.length > 0) {
-        if (files[0].fileType === 'image') {
-            lastMessageText = text ? `📷 Photo et texte` : `📷 ${files.length} Photo(s)`;
-        } else {
-            lastMessageText = text ? `📎 Fichier et texte` : `📎 ${files.length} Fichier(s)`;
-        }
-    }
-
+    const lastMessageText = image ? "📷 Photo" : text;
     conversation.lastMessage = { 
       text: lastMessageText, 
       sender: senderId,
       readBy: [senderId],
     };
     await conversation.save();
-
     await newMessage.populate('sender', 'name profilePicture');
-
     const recipientSocketId = conversation.participants.find(p => p.toString() !== senderId.toString());
     req.io.to(recipientSocketId.toString()).emit('newMessage', newMessage);
-
     res.status(201).json(newMessage);
   } catch (error) {
     console.error(error);
@@ -137,6 +120,7 @@ router.post('/read/:conversationId', protect, async (req, res) => {
   }
 });
 
+// NOUVELLE ROUTE POUR MARQUER TOUT COMME LU
 // @desc    Marquer toutes les conversations comme lues
 // @route   POST /api/messages/read-all
 // @access  Private
@@ -187,14 +171,12 @@ router.delete('/:messageId', protect, async (req, res) => {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
     message.text = "Ce message a été supprimé";
-    message.files = []; // On vide le tableau de fichiers
+    message.image = undefined;
     await message.save();
-
     const conversation = await Conversation.findById(message.conversationId);
     conversation.participants.forEach(participant => {
         req.io.to(participant.toString()).emit('messageEdited', message);
     });
-
     res.json({ message: 'Message supprimé' });
   } catch (error) {
     console.error(error);
@@ -209,25 +191,20 @@ router.put('/:messageId', protect, async (req, res) => {
   try {
     const { text } = req.body;
     const message = await Message.findById(req.params.messageId);
-
     if (!message) {
       return res.status(404).json({ message: 'Message non trouvé' });
     }
     if (message.sender.toString() !== req.user._id.toString()) {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
-
     message.text = text;
     message.isEdited = true;
     await message.save();
-
     await message.populate('sender', 'name profilePicture');
-
     const conversation = await Conversation.findById(message.conversationId);
     conversation.participants.forEach(participant => {
         req.io.to(participant.toString()).emit('messageEdited', message);
     });
-
     res.json(message);
   } catch (error) {
     console.error(error);
