@@ -65,8 +65,10 @@ router.put('/:id/status', protect, admin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (order) {
+      let hasChanged = false;
       // Gérer le changement de statut
       if (req.body.status && req.body.status !== order.status) {
+        hasChanged = true;
         order.status = req.body.status;
         if (req.body.status === 'Confirmée') {
           for (const item of order.orderItems) {
@@ -94,15 +96,18 @@ router.put('/:id/status', protect, admin, async (req, res) => {
 
       // Gérer le changement de paiement
       if (req.body.isPaid === true && !order.isPaid) {
+        hasChanged = true;
         order.isPaid = true;
         order.paidAt = Date.now();
       }
 
       const updatedOrder = await order.save();
 
-      // Envoyer la notification temps réel pour TOUTE mise à jour
-      req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
-      req.io.to('admin').emit('order_update', { orderId: order._id });
+      // Si un changement a eu lieu, on envoie la notification temps réel
+      if (hasChanged) {
+        req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
+        req.io.to('admin').emit('order_update', { orderId: order._id });
+      }
 
       res.json(updatedOrder);
     } else {
@@ -124,14 +129,11 @@ router.put('/:id/pay', protect, async (req, res) => {
       order.isPaid = true;
       order.paidAt = Date.now();
       order.paymentResult = {
-        id: req.body.id,
-        status: req.body.status,
-        update_time: req.body.update_time,
+        id: req.body.id, status: req.body.status, update_time: req.body.update_time,
         email_address: req.body.payer ? req.body.payer.email_address : 'N/A',
       };
       const updatedOrder = await order.save();
 
-      // Notification temps réel
       req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       req.io.to('admin').emit('order_update', { orderId: order._id });
 
