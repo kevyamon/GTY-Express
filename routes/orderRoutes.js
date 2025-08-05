@@ -63,10 +63,10 @@ router.get('/', protect, admin, async (req, res) => {
 // @access  Private/Admin
 router.put('/:id/status', protect, admin, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    // CORRECTION : On s'assure de récupérer les infos de l'utilisateur
+    const order = await Order.findById(req.params.id).populate('user', 'id name');
     if (order) {
       let hasChanged = false;
-      // Gérer le changement de statut
       if (req.body.status && req.body.status !== order.status) {
         hasChanged = true;
         order.status = req.body.status;
@@ -86,15 +86,14 @@ router.put('/:id/status', protect, admin, async (req, res) => {
         }
         const newNotif = {
             notificationId: uuidv4(),
-            user: order.user,
+            user: order.user._id, // On utilise l'ID de l'utilisateur peuplé
             message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
             link: `/order/${order._id}`,
         };
         await Notification.create(newNotif);
-        req.io.to(order.user.toString()).emit('notification', newNotif);
+        req.io.to(order.user._id.toString()).emit('notification', newNotif);
       }
 
-      // Gérer le changement de paiement
       if (req.body.isPaid === true && !order.isPaid) {
         hasChanged = true;
         order.isPaid = true;
@@ -103,9 +102,8 @@ router.put('/:id/status', protect, admin, async (req, res) => {
 
       const updatedOrder = await order.save();
 
-      // Si un changement a eu lieu, on envoie la notification temps réel
       if (hasChanged) {
-        req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
+        req.io.to(order.user._id.toString()).emit('order_update', { orderId: order._id });
         req.io.to('admin').emit('order_update', { orderId: order._id });
       }
 
