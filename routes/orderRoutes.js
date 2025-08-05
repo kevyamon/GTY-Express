@@ -6,8 +6,6 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
 import { v4 as uuidv4 } from 'uuid';
 
-// ... (Les autres routes comme POST /, GET /myorders, GET / ne changent pas) ...
-
 // @desc    Créer une nouvelle commande
 // @route   POST /api/orders
 // @access  Private
@@ -39,8 +37,7 @@ router.post('/', protect, async (req, res) => {
     req.io.to('admin').emit('order_update', { orderId: createdOrder._id });
     res.status(201).json(createdOrder);
   } catch (error) {
-    // Log de l'erreur complète pour un meilleur débogage
-    console.error("Erreur lors de la création de la commande :", error);
+    console.error(error);
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
@@ -61,97 +58,61 @@ router.get('/', protect, admin, async (req, res) => {
   res.json(orders);
 });
 
-
 // @desc    Mettre à jour le statut ou le paiement (Admin)
 // @route   PUT /api/orders/:id/status
 // @access  Private/Admin
 router.put('/:id/status', protect, admin, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate('user', 'id name');
-
-    if (!order) {
-      return res.status(404).json({ message: 'Commande non trouvée' });
-    }
-
-    // Vérification cruciale N°1 : L'utilisateur de la commande doit exister
-    if (!order.user) {
-        return res.status(404).json({ message: "Action impossible : l'utilisateur associé à cette commande n'existe plus." });
-    }
-
-    let hasChanged = false;
-
-    // Mise à jour du statut
-    if (req.body.status && req.body.status !== order.status) {
-      hasChanged = true;
-      order.status = req.body.status;
-
-      // Logique spécifique quand la commande est confirmée
-      if (req.body.status === 'Confirmée') {
-        for (const item of order.orderItems) {
-          const product = await Product.findById(item.product);
-
-          // Vérification cruciale N°2 : Le produit doit encore exister en BDD
-          if (!product) {
-            // On renvoie une erreur claire au lieu d'un 500 générique
-            return res.status(404).json({ 
-              message: `Impossible de confirmer : le produit "${item.name}" n'existe plus.` 
-            });
+    const order = await Order.findById(req.params.id);
+    if (order) {
+      // Gérer le changement de statut
+      if (req.body.status && req.body.status !== order.status) {
+        order.status = req.body.status;
+        if (req.body.status === 'Confirmée') {
+          for (const item of order.orderItems) {
+            const product = await Product.findById(item.product);
+            if (product) {
+              product.countInStock -= item.qty;
+              await product.save();
+              req.io.emit('product_update', { productId: product._id });
+            }
           }
-
-          // Vérification cruciale N°3 (Bonne pratique) : Vérifier le stock disponible
-          if (product.countInStock < item.qty) {
-            return res.status(400).json({ 
-              message: `Stock insuffisant pour "${item.name}". Restant: ${product.countInStock}, Demandé: ${item.qty}.`
-            });
-          }
-
-          product.countInStock -= item.qty;
-          await product.save();
-          req.io.emit('product_update', { productId: product._id });
         }
+        if (req.body.status === 'Livrée') {
+          order.isDelivered = true;
+          order.deliveredAt = Date.now();
+        }
+        const newNotif = {
+            notificationId: uuidv4(),
+            user: order.user,
+            message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
+            link: `/order/${order._id}`,
+        };
+        await Notification.create(newNotif);
+        req.io.to(order.user.toString()).emit('notification', newNotif);
       }
 
-      if (req.body.status === 'Livrée') {
-        order.isDelivered = true;
-        order.deliveredAt = Date.now();
+      // Gérer le changement de paiement
+      if (req.body.isPaid === true && !order.isPaid) {
+        order.isPaid = true;
+        order.paidAt = Date.now();
       }
 
-      // Envoyer la notification à l'utilisateur
-      const newNotif = {
-        notificationId: uuidv4(),
-        user: order.user._id,
-        message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
-        link: `/order/${order._id}`,
-      };
-      await Notification.create(newNotif);
-      req.io.to(order.user._id.toString()).emit('notification', newNotif);
-    }
+      const updatedOrder = await order.save();
 
-    // Mise à jour du paiement
-    if (req.body.isPaid === true && !order.isPaid) {
-      hasChanged = true;
-      order.isPaid = true;
-      order.paidAt = Date.now();
-    }
-
-    const updatedOrder = await order.save();
-
-    // Émettre les mises à jour en temps réel si quelque chose a changé
-    if (hasChanged) {
-      req.io.to(order.user._id.toString()).emit('order_update', { orderId: order._id });
+      // Envoyer la notification temps réel pour TOUTE mise à jour
+      req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       req.io.to('admin').emit('order_update', { orderId: order._id });
-    }
 
-    res.json(updatedOrder);
+      res.json(updatedOrder);
+    } else {
+      res.status(404).json({ message: 'Commande non trouvée' });
+    }
   } catch (error) {
-    // MODIFICATION IMPORTANTE : Logguer l'erreur complète sur le serveur
-    console.error(`ERREUR DÉTAILLÉE sur la route PUT /api/orders/${req.params.id}/status :`, error);
+    console.error(error);
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
-
-
-// ... (Le reste de vos routes : /pay, /cancel, /:id, etc. peuvent rester les mêmes) ...
 
 // @desc    Mettre à jour une commande comme "Payée" (Client)
 // @route   PUT /api/orders/:id/pay
@@ -163,11 +124,14 @@ router.put('/:id/pay', protect, async (req, res) => {
       order.isPaid = true;
       order.paidAt = Date.now();
       order.paymentResult = {
-        id: req.body.id, status: req.body.status, update_time: req.body.update_time,
+        id: req.body.id,
+        status: req.body.status,
+        update_time: req.body.update_time,
         email_address: req.body.payer ? req.body.payer.email_address : 'N/A',
       };
       const updatedOrder = await order.save();
 
+      // Notification temps réel
       req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       req.io.to('admin').emit('order_update', { orderId: order._id });
 
@@ -176,7 +140,7 @@ router.put('/:id/pay', protect, async (req, res) => {
       res.status(404).json({ message: 'Commande non trouvée' });
     }
   } catch (error) {
-    console.error("Erreur lors du paiement de la commande :", error);
+    console.error(error);
     res.status(500).json({ message: 'Erreur du serveur lors du paiement' });
   }
 });
@@ -225,21 +189,12 @@ router.delete('/:id', protect, async (req, res) => {
 // @route   GET /api/orders/:id
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id).populate('user', 'name email');
-    if (!order) {
-      return res.status(404).json({ message: 'Commande non trouvée' });
-    }
-    // L'admin peut voir la commande même si l'user est supprimé, mais pas l'user lui-même
-    if (!order.user && !req.user.isAdmin) {
-        return res.status(404).json({ message: 'Commande non trouvée' });
-    }
+  const order = await Order.findById(req.params.id).populate('user', 'name email');
+  if (order) {
     res.json(order);
-  } catch (error) {
-    console.error(`Erreur lors de la récupération de la commande ${req.params.id}:`, error)
-    res.status(500).json({ message: 'Erreur du serveur' })
+  } else {
+    res.status(404).json({ message: 'Commande non trouvée' });
   }
 });
-
 
 export default router;
