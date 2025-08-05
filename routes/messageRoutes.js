@@ -64,22 +64,24 @@ router.post('/send', protect, async (req, res) => {
   }
 });
 
-// @desc    Récupérer toutes les conversations
+// @desc    Récupérer toutes les conversations de l'utilisateur connecté
 // @route   GET /api/messages
 // @access  Private
 router.get('/', protect, async (req, res) => {
     try {
         const userId = req.user._id;
-        let conversations;
-        if(req.user.isAdmin) {
-            conversations = await Conversation.find().populate('participants', 'name profilePicture').sort({ updatedAt: -1 });
-        } else {
-            conversations = await Conversation.find({ participants: userId }).populate('participants', 'name profilePicture').sort({ updatedAt: -1 });
-        }
+
+        // CORRECTION: On supprime la distinction admin/non-admin.
+        // Tout utilisateur (y compris l'admin) ne doit voir que ses propres conversations.
+        const conversations = await Conversation.find({ participants: userId })
+            .populate('participants', 'name profilePicture')
+            .sort({ updatedAt: -1 });
+
         const conversationsWithStatus = conversations.map(convo => {
           const isUnread = convo.lastMessage && !convo.lastMessage.readBy.includes(userId);
           return { ...convo.toObject(), isUnread };
         });
+
         res.json(conversationsWithStatus);
     } catch (error) {
         res.status(500).json({ message: 'Erreur du serveur' });
