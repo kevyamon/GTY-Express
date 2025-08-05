@@ -6,9 +6,6 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
 import { v4 as uuidv4 } from 'uuid';
 
-// @desc    Créer une nouvelle commande
-// @route   POST /api/orders
-// @access  Private
 router.post('/', protect, async (req, res) => {
   try {
     const { orderItems, shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice } = req.body;
@@ -16,7 +13,6 @@ router.post('/', protect, async (req, res) => {
       return res.status(400).json({ message: 'Aucun article dans la commande' });
     }
     const order = new Order({
-      // LOGIQUE CORRIGÉE POUR L'IMAGE
       orderItems: orderItems.map((x) => ({
         ...x,
         product: x._id,
@@ -43,25 +39,16 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// @desc    Récupérer les commandes de l'utilisateur connecté
-// @route   GET /api/orders/myorders
-// @access  Private
 router.get('/myorders', protect, async (req, res) => {
   const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
   res.json(orders);
 });
 
-// @desc    Récupérer toutes les commandes (Admin)
-// @route   GET /api/orders
-// @access  Private/Admin
 router.get('/', protect, admin, async (req, res) => {
   const orders = await Order.find({}).populate('user', 'id name').sort({ createdAt: -1 });
   res.json(orders);
 });
 
-// @desc    Mettre à jour le statut (Admin)
-// @route   PUT /api/orders/:id/status
-// @access  Private/Admin
 router.put('/:id/status', protect, admin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -90,8 +77,12 @@ router.put('/:id/status', protect, admin, async (req, res) => {
             link: `/order/${order._id}`,
         };
         await Notification.create(newNotif);
+        // On notifie le client
         req.io.to(order.user.toString()).emit('notification', newNotif);
         req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
+        // ON NOTIFIE L'ADMIN AUSSI
+        req.io.to('admin').emit('order_update', { orderId: order._id });
+
       }
       if (req.body.isPaid === true && !order.isPaid) {
         order.isPaid = true;
@@ -108,9 +99,6 @@ router.put('/:id/status', protect, admin, async (req, res) => {
   }
 });
 
-// @desc    Mettre à jour une commande comme "Payée"
-// @route   PUT /api/orders/:id/pay
-// @access  Private
 router.put('/:id/pay', protect, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
@@ -118,9 +106,7 @@ router.put('/:id/pay', protect, async (req, res) => {
       order.isPaid = true;
       order.paidAt = Date.now();
       order.paymentResult = {
-        id: req.body.id,
-        status: req.body.status,
-        update_time: req.body.update_time,
+        id: req.body.id, status: req.body.status, update_time: req.body.update_time,
         email_address: req.body.payer ? req.body.payer.email_address : 'N/A',
       };
       const updatedOrder = await order.save();
@@ -129,14 +115,10 @@ router.put('/:id/pay', protect, async (req, res) => {
       res.status(404).json({ message: 'Commande non trouvée' });
     }
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Erreur du serveur lors du paiement' });
   }
 });
 
-// @desc    Annuler une commande (Utilisateur)
-// @route   PUT /api/orders/:id/cancel
-// @access  Private
 router.put('/:id/cancel', protect, async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (order && order.user.toString() === req.user._id.toString()) {
@@ -161,9 +143,6 @@ router.put('/:id/cancel', protect, async (req, res) => {
     }
 });
 
-// @desc    Supprimer une commande
-// @route   DELETE /api/orders/:id
-// @access  Private
 router.delete('/:id', protect, async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (order && (req.user.isAdmin || order.user.toString() === req.user._id.toString())) {
@@ -174,9 +153,6 @@ router.delete('/:id', protect, async (req, res) => {
     }
 });
 
-// @desc    Récupérer une commande par ID
-// @route   GET /api/orders/:id
-// @access  Private
 router.get('/:id', protect, async (req, res) => {
   const order = await Order.findById(req.params.id).populate('user', 'name email');
   if (order) {
