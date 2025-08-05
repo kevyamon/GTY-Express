@@ -63,9 +63,16 @@ router.get('/', protect, admin, async (req, res) => {
 // @access  Private/Admin
 router.put('/:id/status', protect, admin, async (req, res) => {
   try {
-    // CORRECTION : On s'assure de récupérer les infos de l'utilisateur
     const order = await Order.findById(req.params.id).populate('user', 'id name');
+
     if (order) {
+      // ▼▼▼ CORRECTION ▼▼▼
+      // On vérifie que l'utilisateur associé à la commande existe toujours.
+      if (!order.user) {
+          return res.status(404).json({ message: "Action impossible : l'utilisateur associé à cette commande n'existe plus." });
+      }
+      // ▲▲▲ FIN DE LA CORRECTION ▲▲▲
+
       let hasChanged = false;
       if (req.body.status && req.body.status !== order.status) {
         hasChanged = true;
@@ -86,7 +93,7 @@ router.put('/:id/status', protect, admin, async (req, res) => {
         }
         const newNotif = {
             notificationId: uuidv4(),
-            user: order.user._id, // On utilise l'ID de l'utilisateur peuplé
+            user: order.user._id, // C'est maintenant sûr d'utiliser order.user._id
             message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
             link: `/order/${order._id}`,
         };
@@ -191,6 +198,12 @@ router.delete('/:id', protect, async (req, res) => {
 router.get('/:id', protect, async (req, res) => {
   const order = await Order.findById(req.params.id).populate('user', 'name email');
   if (order) {
+    // CORRECTION : On vérifie aussi ici que l'utilisateur existe avant de renvoyer la commande
+    // Cela évite des erreurs potentielles côté frontend.
+    if (!order.user && !req.user.isAdmin) {
+        // Un utilisateur normal ne devrait pas voir une commande sans utilisateur.
+        return res.status(404).json({ message: 'Commande non trouvée' });
+    }
     res.json(order);
   } else {
     res.status(404).json({ message: 'Commande non trouvée' });
