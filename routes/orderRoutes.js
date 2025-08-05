@@ -16,7 +16,13 @@ router.post('/', protect, async (req, res) => {
       return res.status(400).json({ message: 'Aucun article dans la commande' });
     }
     const order = new Order({
-      orderItems: orderItems.map((x) => ({ ...x, product: x._id, _id: undefined })),
+      // LOGIQUE CORRIGÉE POUR L'IMAGE
+      orderItems: orderItems.map((x) => ({
+        ...x,
+        product: x._id,
+        _id: undefined,
+        image: (x.images && x.images.length > 0) ? x.images[0] : x.image,
+      })),
       user: req.user._id,
       shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice,
     });
@@ -63,25 +69,20 @@ router.put('/:id/status', protect, admin, async (req, res) => {
       const oldStatus = order.status;
       if (req.body.status && req.body.status !== oldStatus) {
         order.status = req.body.status;
-
-        // --- LOGIQUE DE DÉDUCTION DE STOCK ET NOTIFICATION ---
         if (req.body.status === 'Confirmée') {
           for (const item of order.orderItems) {
             const product = await Product.findById(item.product);
             if (product) {
               product.countInStock -= item.qty;
               await product.save();
-              // Émission de l'événement de mise à jour du produit à tous les clients
               req.io.emit('product_update', { productId: product._id });
             }
           }
         }
-
         if (req.body.status === 'Livrée') {
           order.isDelivered = true;
           order.deliveredAt = Date.now();
         }
-
         const newNotif = {
             notificationId: uuidv4(),
             user: order.user,
