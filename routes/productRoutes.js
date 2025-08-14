@@ -1,8 +1,9 @@
 import express from 'express';
 const router = express.Router();
 import Product from '../models/productModel.js';
+import Order from '../models/orderModel.js'; // NOUVEL IMPORT
 import { protect, admin } from '../middleware/authMiddleware.js';
-import asyncHandler from '../middleware/asyncHandler.js'; // AJOUTÉ POUR GÉRER LES ERREURS
+import asyncHandler from '../middleware/asyncHandler.js';
 
 // @desc    Fetch all products
 // @route   GET /api/products
@@ -96,7 +97,7 @@ router.delete('/:id', protect, admin, asyncHandler(async (req, res) => {
   }
 }));
 
-// --- NOUVELLE ROUTE POUR LES AVIS ---
+// --- ROUTE POUR LES AVIS SÉCURISÉE ---
 // @desc    Create a new review
 // @route   POST /api/products/:id/reviews
 // @access  Private
@@ -105,6 +106,7 @@ router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id);
 
     if (product) {
+      // VÉRIFICATION 1 : L'utilisateur a-t-il déjà commenté ?
       const alreadyReviewed = product.reviews.find(
         (r) => r.user.toString() === req.user._id.toString()
       );
@@ -112,6 +114,18 @@ router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
       if (alreadyReviewed) {
         res.status(400);
         throw new Error('Vous avez déjà commenté ce produit');
+      }
+
+      // VÉRIFICATION 2 : L'utilisateur a-t-il acheté et reçu ce produit ?
+      const deliveredOrders = await Order.find({
+        user: req.user._id,
+        status: 'Livrée',
+        'orderItems.product': product._id,
+      });
+
+      if (deliveredOrders.length === 0) {
+        res.status(403); // 403 Forbidden = non autorisé
+        throw new Error("Vous ne pouvez laisser un avis que sur les produits que vous avez reçus.");
       }
 
       const review = {
@@ -135,6 +149,5 @@ router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
     }
   })
 );
-// --- FIN DE LA NOUVELLE ROUTE ---
 
 export default router;
