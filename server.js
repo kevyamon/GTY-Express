@@ -8,6 +8,8 @@ import http from 'http';
 
 dotenv.config();
 import connectDB from './config/db.js';
+// --- NOUVEL IMPORT POUR LE GESTIONNAIRE D'ERREURS ---
+import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 import productRoutes from './routes/productRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -26,13 +28,11 @@ connectDB();
 
 const app = express();
 
-// --- CONFIGURATION CORS AMÉLIORÉE ---
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
   credentials: true,
 };
 app.use(cors(corsOptions));
-// --- FIN DE LA CORRECTION ---
 
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -47,7 +47,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// On retire l'ancien app.use(cors()); car il est maintenant configuré plus haut
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -63,11 +62,9 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
 
-// --- LOGIQUE DE CONNEXION SOCKET.IO CORRIGÉE ---
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
 
-  // On écoute l'événement 'joinRoom' envoyé par le client
   socket.on('joinRoom', (room) => {
     socket.join(room);
     console.log(`Un utilisateur a rejoint la room: ${room}`);
@@ -81,6 +78,12 @@ io.on('connection', (socket) => {
 app.get('/', (req, res) => {
   res.send('L\'API GTY Express est en cours d\'exécution...');
 });
+
+// --- AJOUT DU GESTIONNAIRE D'ERREURS ---
+// Doit être après toutes les routes de l'API
+app.use(notFound);
+app.use(errorHandler);
+// --- FIN DE L'AJOUT ---
 
 server.listen(port, () =>
   console.log(`Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
