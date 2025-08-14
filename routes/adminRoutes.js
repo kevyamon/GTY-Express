@@ -1,9 +1,12 @@
 import express from 'express';
-import asyncHandler from '../middleware/asyncHandler.js'; // NOUVEL IMPORT
+import asyncHandler from '../middleware/asyncHandler.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import User from '../models/userModel.js';
 import Complaint from '../models/complaintModel.js';
 import Notification from '../models/notificationModel.js';
+import Order from '../models/orderModel.js'; // NOUVEL IMPORT
+import Product from '../models/productModel.js'; // NOUVEL IMPORT
+import Promotion from '../models/promotionModel.js'; // NOUVEL IMPORT
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 
@@ -14,6 +17,40 @@ const generateTokenWithStatus = (id, status) => {
       expiresIn: '30d',
     });
 };
+
+// --- NOUVELLE ROUTE POUR LES STATISTIQUES DU TABLEAU DE BORD ---
+// @desc    Récupérer les statistiques pour le tableau de bord
+// @route   GET /api/admin/stats
+// @access  Private/Admin
+router.get('/stats', protect, admin, asyncHandler(async (req, res) => {
+    const totalUsers = await User.countDocuments({});
+    const totalProducts = await Product.countDocuments({});
+    const totalPromotions = await Promotion.countDocuments({});
+    const pendingComplaints = await Complaint.countDocuments({ status: 'pending' });
+
+    // Compter les commandes par statut
+    const orderStatusCounts = await Order.aggregate([
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+    ]);
+
+    // Transformer le résultat en un objet plus facile à utiliser
+    const orderStats = orderStatusCounts.reduce((acc, current) => {
+        acc[current._id] = current.count;
+        return acc;
+    }, {});
+
+    const stats = {
+        totalUsers,
+        totalProducts,
+        totalPromotions,
+        pendingComplaints,
+        orderStats,
+    };
+
+    res.json(stats);
+}));
+// --- FIN DE LA NOUVELLE ROUTE ---
+
 
 // @desc    Récupérer tous les utilisateurs
 // @route   GET /api/admin/users

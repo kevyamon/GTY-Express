@@ -52,6 +52,12 @@ router.post('/register', async (req, res) => {
     }
     const user = await User.create({ name, email, password, phone });
     if (user) {
+      // --- AJOUT : NOTIFICATION EN TEMPS RÉEL AUX ADMINS ---
+      req.io.to('admin').emit('new_user_registered', {
+        name: user.name,
+        createdAt: user.createdAt,
+      });
+      // --- FIN DE L'AJOUT ---
       sendUserResponse(res, user, 201);
     } else {
       res.status(400).json({ message: 'Données utilisateur invalides' });
