@@ -47,6 +47,15 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
+// @desc    Récupérer toutes les commandes (Admin)
+// @route   GET /api/orders
+// @access  Private/Admin
+router.get('/', protect, admin, async (req, res) => {
+  const orders = await Order.find({}).populate('user', 'id name').sort({ createdAt: -1 });
+  res.json(orders);
+});
+
+// --- CORRECTION : La route spécifique '/myorders' est maintenant AVANT la route générique '/:id' ---
 // @desc    Récupérer les commandes de l'utilisateur connecté
 // @route   GET /api/orders/myorders
 // @access  Private
@@ -55,13 +64,23 @@ router.get('/myorders', protect, async (req, res) => {
   const orders = await Order.find({ user: req.user._id, isVisible: true }).sort({ createdAt: -1 });
   res.json(orders);
 });
+// --- FIN DE LA CORRECTION ---
 
-// @desc    Récupérer toutes les commandes (Admin)
-// @route   GET /api/orders
-// @access  Private/Admin
-router.get('/', protect, admin, async (req, res) => {
-  const orders = await Order.find({}).populate('user', 'id name').sort({ createdAt: -1 });
-  res.json(orders);
+// @desc    Récupérer une commande par ID
+// @route   GET /api/orders/:id
+// @access  Private
+router.get('/:id', protect, async (req, res) => {
+  const order = await Order.findById(req.params.id).populate('user', 'name email');
+  if (order) {
+    // On vérifie si l'utilisateur est admin OU si c'est bien sa commande
+    if (req.user.isAdmin || order.user._id.toString() === req.user._id.toString()) {
+      res.json(order);
+    } else {
+      res.status(401).json({ message: 'Non autorisé à voir cette commande' });
+    }
+  } else {
+    res.status(404).json({ message: 'Commande non trouvée' });
+  }
 });
 
 // @desc    Mettre à jour le statut ou le paiement (Admin)
@@ -84,8 +103,7 @@ router.put('/:id/status', protect, admin, async (req, res) => {
           }
         }
         if (req.body.status === 'Livrée') {
-          order.isDelivered = true;
-          order.deliveredAt = Date.now();
+          order.deliveredAt = Date.now(); // Mise à jour de la date de livraison
         }
         const newNotif = {
             notificationId: uuidv4(),
@@ -189,18 +207,6 @@ router.delete('/:id', protect, async (req, res) => {
     } else {
       res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
     }
-});
-
-// @desc    Récupérer une commande par ID
-// @route   GET /api/orders/:id
-// @access  Private
-router.get('/:id', protect, async (req, res) => {
-  const order = await Order.findById(req.params.id).populate('user', 'name email');
-  if (order) {
-    res.json(order);
-  } else {
-    res.status(404).json({ message: 'Commande non trouvée' });
-  }
 });
 
 export default router;
