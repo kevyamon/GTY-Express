@@ -2,11 +2,10 @@ import express from 'express';
 const router = express.Router();
 import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
-import User from '../models/userModel.js'; // AJOUTÉ POUR RÉCUPÉRER LES INFOS USER
+import User from '../models/userModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
 import { v4 as uuidv4 } from 'uuid';
-// --- NOUVEL IMPORT POUR LES EMAILS ---
 import { sendOrderConfirmationEmail, sendStatusUpdateEmail } from '../utils/emailService.js';
 
 // @desc    Créer une nouvelle commande
@@ -30,7 +29,6 @@ router.post('/', protect, async (req, res) => {
     });
     const createdOrder = await order.save();
 
-    // --- ENVOI DE L'EMAIL DE CONFIRMATION ---
     sendOrderConfirmationEmail(createdOrder, req.user);
 
     const adminNotification = {
@@ -53,7 +51,8 @@ router.post('/', protect, async (req, res) => {
 // @route   GET /api/orders/myorders
 // @access  Private
 router.get('/myorders', protect, async (req, res) => {
-  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+  // --- MODIFIÉ POUR NE MONTRER QUE LES COMMANDES VISIBLES ---
+  const orders = await Order.find({ user: req.user._id, isVisible: true }).sort({ createdAt: -1 });
   res.json(orders);
 });
 
@@ -72,7 +71,6 @@ router.put('/:id/status', protect, admin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (order) {
-      // Gérer le changement de statut
       if (req.body.status && req.body.status !== order.status) {
         order.status = req.body.status;
         if (req.body.status === 'Confirmée') {
@@ -98,25 +96,20 @@ router.put('/:id/status', protect, admin, async (req, res) => {
         await Notification.create(newNotif);
         req.io.to(order.user.toString()).emit('notification', newNotif);
 
-        // --- ENVOI DE L'EMAIL DE MISE À JOUR DU STATUT ---
         const customer = await User.findById(order.user);
         if (customer) {
             sendStatusUpdateEmail(order, customer);
         }
       }
 
-      // Gérer le changement de paiement
       if (req.body.isPaid === true && !order.isPaid) {
         order.isPaid = true;
         order.paidAt = Date.now();
       }
 
       const updatedOrder = await order.save();
-
-      // Envoyer la notification temps réel pour TOUTE mise à jour
       req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       req.io.to('admin').emit('order_update', { orderId: order._id });
-
       res.json(updatedOrder);
     } else {
       res.status(404).json({ message: 'Commande non trouvée' });
@@ -143,11 +136,8 @@ router.put('/:id/pay', protect, async (req, res) => {
         email_address: req.body.payer ? req.body.payer.email_address : 'N/A',
       };
       const updatedOrder = await order.save();
-
-      // Notification temps réel
       req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       req.io.to('admin').emit('order_update', { orderId: order._id });
-
       res.json(updatedOrder);
     } else {
       res.status(404).json({ message: 'Commande non trouvée' });
@@ -167,10 +157,7 @@ router.put('/:id/cancel', protect, async (req, res) => {
         if (order.status === 'En attente') {
             order.status = 'Annulée';
             const updatedOrder = await order.save();
-
-            // --- ENVOI DE L'EMAIL D'ANNULATION ---
             sendStatusUpdateEmail(updatedOrder, req.user);
-
             const newNotif = {
                 notificationId: uuidv4(),
                 user: 'admin',
@@ -189,14 +176,16 @@ router.put('/:id/cancel', protect, async (req, res) => {
     }
 });
 
-// @desc    Supprimer une commande
+// @desc    Supprimer une commande de la vue (soft delete)
 // @route   DELETE /api/orders/:id
 // @access  Private
 router.delete('/:id', protect, async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (order && (req.user.isAdmin || order.user.toString() === req.user._id.toString())) {
-      await order.deleteOne();
-      res.json({ message: 'Commande supprimée' });
+      // --- MODIFIÉ POUR LA SUPPRESSION DOUCE ---
+      order.isVisible = false;
+      await order.save();
+      res.json({ message: 'Commande masquée de votre historique' });
     } else {
       res.status(404).json({ message: 'Commande non trouvée ou autorisation refusée' });
     }

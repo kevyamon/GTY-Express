@@ -7,7 +7,7 @@ const orderSchema = mongoose.Schema(
       {
         name: { type: String, required: true },
         qty: { type: Number, required: true },
-        image: { type: String, required: false }, // MODIFIÉ ICI
+        image: { type: String, required: false },
         price: { type: Number, required: true },
         product: {
           type: mongoose.Schema.Types.ObjectId,
@@ -39,6 +39,13 @@ const orderSchema = mongoose.Schema(
       default: 'En attente',
     },
     deliveredAt: { type: Date },
+    // --- AJOUT POUR LA SUPPRESSION DOUCE ---
+    isVisible: {
+      type: Boolean,
+      required: true,
+      default: true,
+    },
+    // --- FIN DE L'AJOUT ---
   },
   {
     timestamps: true,
