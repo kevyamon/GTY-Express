@@ -4,23 +4,24 @@ import User from '../models/userModel.js';
 import { protect } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 
-// MODIFIÉ POUR INCLURE LE STATUT
 const generateToken = (id, status) => {
   return jwt.sign({ id, status }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 };
 
-const sendUserResponse = (res, user, statusCode = 200) => {
+// --- MODIFIÉ POUR INCLURE isNewUser ---
+const sendUserResponse = (res, user, statusCode = 200, isNew = false) => {
     res.status(statusCode).json({
         _id: user._id,
         name: user.name,
         email: user.email,
         phone: user.phone,
         isAdmin: user.isAdmin,
-        status: user.status, // On envoie le statut
+        status: user.status,
         profilePicture: user.profilePicture,
-        token: generateToken(user._id, user.status), // On passe le statut au token
+        token: generateToken(user._id, user.status),
+        isNewUser: isNew, // On ajoute ce drapeau
       });
 };
 
@@ -30,7 +31,8 @@ router.post('/login', async (req, res) => {
     $or: [{ email: loginIdentifier }, { phone: loginIdentifier }],
   });
   if (user && (await user.matchPassword(password))) {
-    sendUserResponse(res, user, 200);
+    // Un utilisateur qui se connecte n'est jamais nouveau
+    sendUserResponse(res, user, 200, false);
   } else {
     res.status(401).json({ message: 'Identifiant ou mot de passe invalide' });
   }
@@ -52,13 +54,12 @@ router.post('/register', async (req, res) => {
     }
     const user = await User.create({ name, email, password, phone });
     if (user) {
-      // --- AJOUT : NOTIFICATION EN TEMPS RÉEL AUX ADMINS ---
       req.io.to('admin').emit('new_user_registered', {
         name: user.name,
         createdAt: user.createdAt,
       });
-      // --- FIN DE L'AJOUT ---
-      sendUserResponse(res, user, 201);
+      // Un utilisateur qui s'inscrit est toujours nouveau
+      sendUserResponse(res, user, 201, true);
     } else {
       res.status(400).json({ message: 'Données utilisateur invalides' });
     }
