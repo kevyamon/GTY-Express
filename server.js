@@ -8,7 +8,6 @@ import http from 'http';
 
 dotenv.config();
 import connectDB from './config/db.js';
-// --- NOUVEL IMPORT POUR LE GESTIONNAIRE D'ERREURS ---
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 
 import productRoutes from './routes/productRoutes.js';
@@ -21,6 +20,7 @@ import promoBannerRoutes from './routes/promoBannerRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
+import warningRoutes from './routes/warningRoutes.js'; // NOUVEL IMPORT
 
 const port = process.env.PORT || 5000;
 
@@ -61,6 +61,7 @@ app.use('/api/promobanner', promoBannerRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
+app.use('/api/warnings', warningRoutes); // NOUVELLE ROUTE
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
@@ -79,11 +80,8 @@ app.get('/', (req, res) => {
   res.send('L\'API GTY Express est en cours d\'exécution...');
 });
 
-// --- AJOUT DU GESTIONNAIRE D'ERREURS ---
-// Doit être après toutes les routes de l'API
 app.use(notFound);
 app.use(errorHandler);
-// --- FIN DE L'AJOUT ---
 
 server.listen(port, () =>
   console.log(`Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
