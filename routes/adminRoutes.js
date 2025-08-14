@@ -18,9 +18,6 @@ const generateTokenWithStatus = (id, status) => {
     });
 };
 
-// @desc    Récupérer les statistiques pour le tableau de bord
-// @route   GET /api/admin/stats
-// @access  Private/Admin
 router.get('/stats', protect, admin, asyncHandler(async (req, res) => {
     const totalUsers = await User.countDocuments({});
     const totalProducts = await Product.countDocuments({});
@@ -47,17 +44,11 @@ router.get('/stats', protect, admin, asyncHandler(async (req, res) => {
     res.json(stats);
 }));
 
-// @desc    Récupérer tous les utilisateurs
-// @route   GET /api/admin/users
-// @access  Private/Admin
 router.get('/users', protect, admin, asyncHandler(async (req, res) => {
     const users = await User.find({}).sort({ createdAt: -1 });
     res.json(users);
 }));
 
-// @desc    Changer le statut d'un utilisateur (bannir/activer)
-// @route   PUT /api/admin/users/:id/status
-// @access  Private/Admin
 router.put('/users/:id/status', protect, admin, asyncHandler(async (req, res) => {
     const { status } = req.body;
     const userToModify = await User.findById(req.params.id);
@@ -67,7 +58,6 @@ router.put('/users/:id/status', protect, admin, asyncHandler(async (req, res) =>
         throw new Error('Utilisateur non trouvé');
     }
 
-    // RÈGLE DE SÉCURITÉ ABSOLUE POUR LE SUPER ADMIN
     if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
         const tryingAdmin = req.user;
         const superAdmin = await User.findById(userToModify._id);
@@ -96,9 +86,6 @@ router.put('/users/:id/status', protect, admin, asyncHandler(async (req, res) =>
     res.json({ message: 'Statut mis à jour', user: userToModify });
 }));
 
-// @desc    Changer le rôle d'un utilisateur (admin/client)
-// @route   PUT /api/admin/users/:id/role
-// @access  Private/Admin
 router.put('/users/:id/role', protect, admin, asyncHandler(async (req, res) => {
     const { isAdmin } = req.body;
     const userToModify = await User.findById(req.params.id);
@@ -108,7 +95,6 @@ router.put('/users/:id/role', protect, admin, asyncHandler(async (req, res) => {
         throw new Error('Utilisateur non trouvé');
     }
 
-    // RÈGLE DE SÉCURITÉ ABSOLUE POUR LE SUPER ADMIN
     if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
         const tryingAdmin = req.user;
         const superAdmin = await User.findById(userToModify._id);
@@ -120,7 +106,7 @@ router.put('/users/:id/role', protect, admin, asyncHandler(async (req, res) => {
             message: `ALERTE: ${tryingAdmin.name} (Email: ${tryingAdmin.email}, Tél: ${tryingAdmin.phone}) a essayé de ${action}.`,
             link: '/admin/userlist',
         };
-        await Notification.create(newNotif);
+        await Notification.create(newNotif); // CORRECTION DE LA LIGNE MANQUANTE
         req.io.to(superAdmin._id.toString()).emit('notification', newNotif);
 
         res.status(403);
@@ -149,17 +135,11 @@ router.put('/users/:id/role', protect, admin, asyncHandler(async (req, res) => {
     res.json({ message: 'Rôle mis à jour', user: updatedUser });
 }));
 
-// @desc    Récupérer toutes les réclamations
-// @route   GET /api/admin/complaints
-// @access  Private/Admin
 router.get('/complaints', protect, admin, asyncHandler(async (req, res) => {
     const complaints = await Complaint.find({}).populate('user', 'name email').sort({ createdAt: -1 });
     res.json(complaints);
 }));
 
-// @desc    Supprimer une réclamation
-// @route   DELETE /api/admin/complaints/:id
-// @access  Private/Admin
 router.delete('/complaints/:id', protect, admin, asyncHandler(async (req, res) => {
     const complaint = await Complaint.findById(req.params.id);
     if (complaint) {
@@ -172,9 +152,6 @@ router.delete('/complaints/:id', protect, admin, asyncHandler(async (req, res) =
     }
 }));
 
-// @desc    Supprimer toutes les réclamations
-// @route   DELETE /api/admin/complaints
-// @access  Private/Admin
 router.delete('/complaints', protect, admin, asyncHandler(async (req, res) => {
     await Complaint.deleteMany({});
     req.io.to('admin').emit('complaint_update');
