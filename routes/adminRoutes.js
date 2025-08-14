@@ -4,9 +4,9 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 import User from '../models/userModel.js';
 import Complaint from '../models/complaintModel.js';
 import Notification from '../models/notificationModel.js';
-import Order from '../models/orderModel.js'; // NOUVEL IMPORT
-import Product from '../models/productModel.js'; // NOUVEL IMPORT
-import Promotion from '../models/promotionModel.js'; // NOUVEL IMPORT
+import Order from '../models/orderModel.js';
+import Product from '../models/productModel.js';
+import Promotion from '../models/promotionModel.js';
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 
@@ -18,7 +18,6 @@ const generateTokenWithStatus = (id, status) => {
     });
 };
 
-// --- NOUVELLE ROUTE POUR LES STATISTIQUES DU TABLEAU DE BORD ---
 // @desc    Récupérer les statistiques pour le tableau de bord
 // @route   GET /api/admin/stats
 // @access  Private/Admin
@@ -28,12 +27,10 @@ router.get('/stats', protect, admin, asyncHandler(async (req, res) => {
     const totalPromotions = await Promotion.countDocuments({});
     const pendingComplaints = await Complaint.countDocuments({ status: 'pending' });
 
-    // Compter les commandes par statut
     const orderStatusCounts = await Order.aggregate([
         { $group: { _id: '$status', count: { $sum: 1 } } }
     ]);
 
-    // Transformer le résultat en un objet plus facile à utiliser
     const orderStats = orderStatusCounts.reduce((acc, current) => {
         acc[current._id] = current.count;
         return acc;
@@ -49,8 +46,6 @@ router.get('/stats', protect, admin, asyncHandler(async (req, res) => {
 
     res.json(stats);
 }));
-// --- FIN DE LA NOUVELLE ROUTE ---
-
 
 // @desc    Récupérer tous les utilisateurs
 // @route   GET /api/admin/users
@@ -72,22 +67,23 @@ router.put('/users/:id/status', protect, admin, asyncHandler(async (req, res) =>
         throw new Error('Utilisateur non trouvé');
     }
 
+    // RÈGLE DE SÉCURITÉ ABSOLUE POUR LE SUPER ADMIN
     if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
         const tryingAdmin = req.user;
-        const superAdmin = await User.findOne({ email: process.env.SUPER_ADMIN_EMAIL });
+        const superAdmin = await User.findById(userToModify._id);
+        const action = `changer le statut en "${status}"`;
 
-        if (superAdmin) { // On s'assure que le super admin existe
-            const newNotif = {
-                notificationId: uuidv4(),
-                user: superAdmin._id,
-                message: `ALERTE SÉCURITÉ : L'admin ${tryingAdmin.name} a tenté de modifier votre compte.`,
-                link: '/admin/userlist',
-            };
-            await Notification.create(newNotif);
-            req.io.to(superAdmin._id.toString()).emit('notification', newNotif);
-        }
+        const newNotif = {
+            notificationId: uuidv4(),
+            user: superAdmin._id,
+            message: `ALERTE: ${tryingAdmin.name} (Email: ${tryingAdmin.email}, Tél: ${tryingAdmin.phone}) a essayé de ${action} sur votre compte.`,
+            link: '/admin/userlist',
+        };
+        await Notification.create(newNotif);
+        req.io.to(superAdmin._id.toString()).emit('notification', newNotif);
+        
         res.status(403);
-        throw new Error('Action non autorisée. Le Super Admin ne peut pas être modifié.');
+        throw new Error('Impossible de changer le statut de cet utilisateur. Attention ! Vous risquez d\'être Banni !');
     }
 
     userToModify.status = status;
@@ -112,9 +108,23 @@ router.put('/users/:id/role', protect, admin, asyncHandler(async (req, res) => {
         throw new Error('Utilisateur non trouvé');
     }
 
+    // RÈGLE DE SÉCURITÉ ABSOLUE POUR LE SUPER ADMIN
     if (userToModify.email === process.env.SUPER_ADMIN_EMAIL) {
+        const tryingAdmin = req.user;
+        const superAdmin = await User.findById(userToModify._id);
+        const action = isAdmin ? "vous nommer admin (déjà fait)" : "vous révoquer les droits d'admin";
+
+        const newNotif = {
+            notificationId: uuidv4(),
+            user: superAdmin._id,
+            message: `ALERTE: ${tryingAdmin.name} (Email: ${tryingAdmin.email}, Tél: ${tryingAdmin.phone}) a essayé de ${action}.`,
+            link: '/admin/userlist',
+        };
+        await Notification.create(newNotif);
+        req.io.to(superAdmin._id.toString()).emit('notification', newNotif);
+
         res.status(403);
-        throw new Error('Le rôle du Super Admin ne peut pas être modifié.');
+        throw new Error('Impossible de changer le rôle de cet utilisateur. Attention ! Vous risquez d\'être Banni !');
     }
 
     userToModify.isAdmin = isAdmin;
