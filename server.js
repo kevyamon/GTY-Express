@@ -26,10 +26,18 @@ connectDB();
 
 const app = express();
 
+// --- CONFIGURATION CORS AMÉLIORÉE ---
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
+  credentials: true,
+};
+app.use(cors(corsOptions));
+// --- FIN DE LA CORRECTION ---
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
     methods: ['GET', 'POST'],
   },
 });
@@ -39,7 +47,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
+// On retire l'ancien app.use(cors()); car il est maintenant configuré plus haut
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
