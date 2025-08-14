@@ -2,9 +2,12 @@ import express from 'express';
 const router = express.Router();
 import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
+import User from '../models/userModel.js'; // AJOUTÉ POUR RÉCUPÉRER LES INFOS USER
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
 import { v4 as uuidv4 } from 'uuid';
+// --- NOUVEL IMPORT POUR LES EMAILS ---
+import { sendOrderConfirmationEmail, sendStatusUpdateEmail } from '../utils/emailService.js';
 
 // @desc    Créer une nouvelle commande
 // @route   POST /api/orders
@@ -26,6 +29,10 @@ router.post('/', protect, async (req, res) => {
       shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice,
     });
     const createdOrder = await order.save();
+
+    // --- ENVOI DE L'EMAIL DE CONFIRMATION ---
+    sendOrderConfirmationEmail(createdOrder, req.user);
+
     const adminNotification = {
       notificationId: uuidv4(),
       user: 'admin',
@@ -90,6 +97,12 @@ router.put('/:id/status', protect, admin, async (req, res) => {
         };
         await Notification.create(newNotif);
         req.io.to(order.user.toString()).emit('notification', newNotif);
+
+        // --- ENVOI DE L'EMAIL DE MISE À JOUR DU STATUT ---
+        const customer = await User.findById(order.user);
+        if (customer) {
+            sendStatusUpdateEmail(order, customer);
+        }
       }
 
       // Gérer le changement de paiement
@@ -154,6 +167,10 @@ router.put('/:id/cancel', protect, async (req, res) => {
         if (order.status === 'En attente') {
             order.status = 'Annulée';
             const updatedOrder = await order.save();
+
+            // --- ENVOI DE L'EMAIL D'ANNULATION ---
+            sendStatusUpdateEmail(updatedOrder, req.user);
+
             const newNotif = {
                 notificationId: uuidv4(),
                 user: 'admin',
