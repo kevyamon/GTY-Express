@@ -83,6 +83,8 @@ app.get('/', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
+// --- MODIFICATION POUR NOTRE TEST ---
+// J'ai ajouté un message unique pour vérifier le déploiement.
 server.listen(port, () =>
-  console.log(`Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
+  console.log(`--- VERSION DE TEST DEPLOIEMENT v1.1 --- Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
 );
