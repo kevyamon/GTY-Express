@@ -33,6 +33,7 @@ connectDB();
 
 const app = express();
 
+// --- CORRECTION : Faire confiance au proxy de Render ---
 app.set('trust proxy', 1);
 
 const limiter = rateLimit({
@@ -89,6 +90,9 @@ io.on('connection', (socket) => {
     console.log('Un client est déconnecté:', socket.id);
   });
 });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // --- ROUTE DE VERSION CORRIGÉE POUR ÊTRE PLUS ROBUSTE ---
 app.get('/api/version', async (req, res) => {
