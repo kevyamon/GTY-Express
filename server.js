@@ -26,10 +26,7 @@ import complaintRoutes from './routes/complaintRoutes.js';
 import warningRoutes from './routes/warningRoutes.js';
 import suggestionRoutes from './routes/suggestionRoutes.js';
 
-// --- NOUVEAU : On enregistre l'heure de démarrage du serveur ---
 const serverStartTime = new Date();
-// --- FIN DE L'AJOUT ---
-
 const port = process.env.PORT || 5000;
 
 connectDB();
@@ -82,12 +79,10 @@ app.use('/api/suggestions', suggestionRoutes);
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
-
   socket.on('joinRoom', (room) => {
     socket.join(room);
     console.log(`Un utilisateur a rejoint la room: ${room}`);
   });
-
   socket.on('disconnect', () => {
     console.log('Un client est déconnecté:', socket.id);
   });
@@ -98,10 +93,10 @@ const __dirname = path.dirname(__filename);
 
 app.get('/api/version', async (req, res) => {
   try {
-    const packageJsonPath = path.join(__dirname, '..', 'package.json');
+    // --- CORRECTION DU CHEMIN D'ACCÈS ---
+    const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
     const { version } = JSON.parse(packageJsonData);
-    // --- On ajoute la date de déploiement à la réponse ---
     res.json({ version, deployedAt: serverStartTime.toISOString() });
   } catch (error) {
     res.status(500).json({ message: 'Impossible de lire la version de l\'application' });
