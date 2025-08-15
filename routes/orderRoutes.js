@@ -69,9 +69,7 @@ router.post('/', protect, async (req, res) => {
       orderData.coupon = {
         code: coupon.code,
         discountType: coupon.discountType,
-        // --- CORRECTION APPLIQUÉE ICI ---
         discountAmount: coupon.discountAmountApplied,
-        // --- FIN DE LA CORRECTION ---
         priceBeforeDiscount: coupon.priceBeforeDiscount,
       };
     }
@@ -142,57 +140,85 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
+// --- ROUTE DE MISE À JOUR ENTIÈREMENT CORRIGÉE ET AMÉLIORÉE ---
 // @desc    Mettre à jour le statut ou le paiement (Admin)
 // @route   PUT /api/orders/:id/status
 // @access  Private/Admin
 router.put('/:id/status', protect, admin, async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
-    if (order) {
-      if (req.body.status && req.body.status !== order.status) {
-        order.status = req.body.status;
-        if (req.body.status === 'Confirmée') {
-          for (const item of order.orderItems) {
-            const product = await Product.findById(item.product);
-            if (product) {
-              product.countInStock -= item.qty;
-              await product.save();
-              req.io.emit('product_update', { productId: product._id });
-            }
+
+    if (!order) {
+      return res.status(404).json({ message: 'Commande non trouvée' });
+    }
+
+    let hasChanged = false;
+    const customer = await User.findById(order.user);
+
+    // Gérer le changement de statut de la commande
+    if (req.body.status && req.body.status !== order.status) {
+      order.status = req.body.status;
+      hasChanged = true;
+
+      if (order.status === 'Confirmée') {
+        for (const item of order.orderItems) {
+          const product = await Product.findById(item.product);
+          if (product) {
+            product.countInStock -= item.qty;
+            await product.save();
+            req.io.emit('product_update', { productId: product._id });
           }
         }
-        if (req.body.status === 'Livrée') {
-          order.deliveredAt = Date.now();
-        }
-        const newNotif = {
-            notificationId: uuidv4(),
-            user: order.user,
-            message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${req.body.status}"`,
-            link: `/order/${order._id}`,
-        };
-        await Notification.create(newNotif);
-        req.io.to(order.user.toString()).emit('notification', newNotif);
-
-        const customer = await User.findById(order.user);
-        if (customer) {
-            sendStatusUpdateEmail(order, customer);
-        }
       }
 
-      if (req.body.isPaid === true && !order.isPaid) {
-        order.isPaid = true;
-        order.paidAt = Date.now();
+      if (order.status === 'Livrée' && !order.deliveredAt) {
+        order.deliveredAt = Date.now();
       }
 
+      // Envoyer la notification et l'email pour le statut
+      const newNotif = {
+          notificationId: uuidv4(),
+          user: order.user,
+          message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${order.status}"`,
+          link: `/order/${order._id}`,
+      };
+      await Notification.create(newNotif);
+      req.io.to(order.user.toString()).emit('notification', newNotif);
+
+      if (customer) {
+          sendStatusUpdateEmail(order, customer);
+      }
+    }
+
+    // Gérer le changement de statut de paiement
+    if (req.body.isPaid === true && !order.isPaid) {
+      order.isPaid = true;
+      order.paidAt = Date.now();
+      hasChanged = true;
+      
+      // BONUS : Envoyer une notification pour le paiement
+      const paymentNotif = {
+        notificationId: uuidv4(),
+        user: order.user,
+        message: `Votre paiement pour la commande N°${order._id.toString().substring(0,8)} a été confirmé.`,
+        link: `/order/${order._id}`,
+      };
+      await Notification.create(paymentNotif);
+      req.io.to(order.user.toString()).emit('notification', paymentNotif);
+    }
+
+    // Sauvegarder uniquement si quelque chose a changé
+    if (hasChanged) {
       const updatedOrder = await order.save();
       req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       req.io.to('admin').emit('order_update', { orderId: order._id });
       res.json(updatedOrder);
     } else {
-      res.status(404).json({ message: 'Commande non trouvée' });
+      res.json(order); // Renvoyer la commande sans modification si rien n'a changé
     }
+
   } catch (error) {
-    console.error(error);
+    console.error("Erreur lors de la mise à jour du statut de la commande:", error);
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
