@@ -6,10 +6,8 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import http from 'http';
 import rateLimit from 'express-rate-limit';
-// --- MODIFICATION : On importe les modules pour lire les fichiers ---
 import { fileURLToPath } from 'url';
 import { promises as fs } from 'fs';
-// --- FIN DE LA MODIFICATION ---
 
 dotenv.config();
 import connectDB from './config/db.js';
@@ -34,6 +32,10 @@ const port = process.env.PORT || 5000;
 connectDB();
 
 const app = express();
+
+// --- CORRECTION : FAIRE CONFIANCE AU PROXY DE RENDER ---
+app.set('trust proxy', 1);
+// --- FIN DE LA CORRECTION ---
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -90,13 +92,12 @@ io.on('connection', (socket) => {
   });
 });
 
-// --- ROUTE DE VERSION CORRIGÉE AVEC UNE MÉTHODE FIABLE ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.get('/api/version', async (req, res) => {
   try {
-    const packageJsonPath = path.resolve(__dirname, '..', 'package.json'); // Utilisation de path.resolve pour plus de robustesse
+    const packageJsonPath = path.resolve(__dirname, '..', 'package.json');
     const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
     const { version } = JSON.parse(packageJsonData);
     res.json({ version, deployedAt: serverStartTime.toISOString() });
@@ -105,7 +106,6 @@ app.get('/api/version', async (req, res) => {
     res.status(500).json({ message: "Impossible de lire la version de l'application" });
   }
 });
-// --- FIN DE LA CORRECTION ---
 
 app.get('/', (req, res) => {
   res.send("L'API GTY Express est en cours d'exécution...");
@@ -120,4 +120,4 @@ app.use(errorHandler);
 
 server.listen(port, () =>
   console.log(`Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
-)
+);
