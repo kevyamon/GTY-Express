@@ -6,8 +6,8 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import http from 'http';
 import rateLimit from 'express-rate-limit';
-import { fileURLToPath } from 'url';
-import { promises as fs } from 'fs';
+// --- MODIFICATION : On importe directement le package.json ---
+import pkg from './package.json' assert { type: 'json' };
 
 dotenv.config();
 import connectDB from './config/db.js';
@@ -88,23 +88,19 @@ io.on('connection', (socket) => {
   });
 });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-app.get('/api/version', async (req, res) => {
+// --- ROUTE DE VERSION SIMPLIFIÉE ET FIABILISÉE ---
+app.get('/api/version', (req, res) => {
   try {
-    // --- CORRECTION DU CHEMIN D'ACCÈS ---
-    const packageJsonPath = path.join(__dirname, 'package.json');
-    const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
-    const { version } = JSON.parse(packageJsonData);
+    const { version } = pkg;
     res.json({ version, deployedAt: serverStartTime.toISOString() });
   } catch (error) {
-    res.status(500).json({ message: 'Impossible de lire la version de l\'application' });
+    res.status(500).json({ message: "Impossible de lire la version de l'application" });
   }
 });
+// --- FIN DE LA CORRECTION ---
 
 app.get('/', (req, res) => {
-  res.send('L\'API GTY Express est en cours d\'exécution...');
+  res.send("L'API GTY Express est en cours d'exécution...");
 });
 
 app.get('/ping', (req, res) => {
