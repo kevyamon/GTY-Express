@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import http from 'http';
+import rateLimit from 'express-rate-limit'; // --- NOUVEL IMPORT ---
 
 dotenv.config();
 import connectDB from './config/db.js';
@@ -20,13 +21,24 @@ import promoBannerRoutes from './routes/promoBannerRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
-import warningRoutes from './routes/warningRoutes.js'; // NOUVEL IMPORT
+import warningRoutes from './routes/warningRoutes.js';
 
 const port = process.env.PORT || 5000;
 
 connectDB();
 
 const app = express();
+
+// --- CONFIGURATION DU RATE LIMITER ---
+// Applique le rate limiting à toutes les routes /api/
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limite chaque IP à 100 requêtes par fenêtre de 15 minutes
+  standardHeaders: true, // Renvoie les informations de limite dans les en-têtes `RateLimit-*`
+  legacyHeaders: false, // Désactive les en-têtes `X-RateLimit-*`
+});
+app.use('/api', limiter);
+// --- FIN DE LA CONFIGURATION ---
 
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
@@ -61,7 +73,7 @@ app.use('/api/promobanner', promoBannerRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
-app.use('/api/warnings', warningRoutes); // NOUVELLE ROUTE
+app.use('/api/warnings', warningRoutes);
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
@@ -83,8 +95,6 @@ app.get('/', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
-// --- MODIFICATION POUR NOTRE TEST ---
-// J'ai ajouté un message unique pour vérifier le déploiement.
 server.listen(port, () =>
   console.log(`--- VERSION DE TEST DEPLOIEMENT v1.1 --- Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
 );

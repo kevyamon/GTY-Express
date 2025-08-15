@@ -1,8 +1,25 @@
 import express from 'express';
+import rateLimit from 'express-rate-limit'; // --- NOUVEL IMPORT ---
 const router = express.Router();
 import User from '../models/userModel.js';
 import { protect } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
+
+// --- CONFIGURATION DU RATE LIMITER POUR LE LOGIN ---
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Bloque après 5 tentatives
+  message: {
+    message: 'Trop de tentatives de connexion. Veuillez réessayer dans 15 minutes.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  // La clé de blocage est basée sur l'email ou le téléphone fourni
+  keyGenerator: (req, res) => {
+    return req.body.loginIdentifier;
+  },
+});
+// --- FIN DE LA CONFIGURATION ---
 
 const generateToken = (id, status) => {
   return jwt.sign({ id, status }, process.env.JWT_SECRET, {
@@ -10,7 +27,6 @@ const generateToken = (id, status) => {
   });
 };
 
-// --- MODIFIÉ POUR INCLURE isNewUser ---
 const sendUserResponse = (res, user, statusCode = 200, isNew = false) => {
     res.status(statusCode).json({
         _id: user._id,
@@ -21,11 +37,12 @@ const sendUserResponse = (res, user, statusCode = 200, isNew = false) => {
         status: user.status,
         profilePicture: user.profilePicture,
         token: generateToken(user._id, user.status),
-        isNewUser: isNew, // On ajoute ce drapeau
+        isNewUser: isNew,
       });
 };
 
-router.post('/login', async (req, res) => {
+// --- ROUTE DE LOGIN PROTÉGÉE PAR LE RATE LIMITER ---
+router.post('/login', loginLimiter, async (req, res) => {
   const { loginIdentifier, password } = req.body;
   const user = await User.findOne({
     $or: [{ email: loginIdentifier }, { phone: loginIdentifier }],
@@ -37,6 +54,7 @@ router.post('/login', async (req, res) => {
     res.status(401).json({ message: 'Identifiant ou mot de passe invalide' });
   }
 });
+// --- FIN DE LA MODIFICATION ---
 
 router.post('/register', async (req, res) => {
   try {
@@ -58,7 +76,6 @@ router.post('/register', async (req, res) => {
         name: user.name,
         createdAt: user.createdAt,
       });
-      // Un utilisateur qui s'inscrit est toujours nouveau
       sendUserResponse(res, user, 201, true);
     } else {
       res.status(400).json({ message: 'Données utilisateur invalides' });
