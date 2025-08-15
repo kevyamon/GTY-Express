@@ -3,15 +3,12 @@ const router = express.Router();
 import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import User from '../models/userModel.js';
-// --- NOUVEL IMPORT ---
 import PromoBanner from '../models/promoBannerModel.js';
-// --- FIN DE L'IMPORT ---
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
 import { v4 as uuidv4 } from 'uuid';
 import { sendOrderConfirmationEmail, sendStatusUpdateEmail } from '../utils/emailService.js';
 
-// --- NOUVELLE ROUTE POUR VALIDER UN COUPON ---
 // @desc    Valider un code coupon
 // @route   POST /api/orders/validate-coupon
 // @access  Private
@@ -21,27 +18,18 @@ router.post('/validate-coupon', protect, async (req, res) => {
     if (!couponCode) {
       return res.status(400).json({ message: 'Le code du coupon est requis.' });
     }
-
-    // 1. Trouver la bannière active
     const activeBanner = await PromoBanner.findOne({ isActive: true });
-
-    // 2. Vérifier si la bannière existe et n'est pas expirée
     if (!activeBanner || new Date() > new Date(activeBanner.endDate)) {
       return res.status(404).json({ message: 'Coupon invalide ou expiré.' });
     }
-
-    // 3. Chercher le coupon dans la bannière
     const coupon = activeBanner.coupons.find(c => c.code === couponCode);
-
     if (coupon) {
-      // Si le coupon est trouvé, renvoyer ses détails
       res.json({
         code: coupon.code,
         discountType: coupon.discountType,
         discountValue: coupon.discountValue,
       });
     } else {
-      // Si le coupon n'est pas trouvé dans la bannière active
       res.status(404).json({ message: 'Coupon invalide ou expiré.' });
     }
   } catch (error) {
@@ -49,14 +37,12 @@ router.post('/validate-coupon', protect, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
-// --- FIN DE LA NOUVELLE ROUTE ---
 
 // @desc    Créer une nouvelle commande
 // @route   POST /api/orders
 // @access  Private
 router.post('/', protect, async (req, res) => {
   try {
-    // On déstructure le coupon du corps de la requête
     const { orderItems, shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice, coupon } = req.body;
     
     if (orderItems && orderItems.length === 0) {
@@ -79,12 +65,13 @@ router.post('/', protect, async (req, res) => {
       totalPrice,
     };
 
-    // Si un coupon est appliqué, on l'ajoute aux données de la commande
     if (coupon && coupon.code) {
       orderData.coupon = {
         code: coupon.code,
         discountType: coupon.discountType,
-        discountAmount: coupon.discountAmount,
+        // --- CORRECTION APPLIQUÉE ICI ---
+        discountAmount: coupon.discountAmountApplied,
+        // --- FIN DE LA CORRECTION ---
         priceBeforeDiscount: coupon.priceBeforeDiscount,
       };
     }
@@ -105,8 +92,8 @@ router.post('/', protect, async (req, res) => {
     req.io.to('admin').emit('order_update', { orderId: createdOrder._id });
     res.status(201).json(createdOrder);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erreur du serveur' });
+    console.error('Erreur lors de la création de la commande:', error);
+    res.status(500).json({ message: 'Erreur du serveur lors de la création de la commande' });
   }
 });
 
@@ -126,30 +113,32 @@ router.get('/myorders', protect, async (req, res) => {
   res.json(orders);
 });
 
-// --- NOUVELLE ROUTE POUR L'HISTORIQUE COMPLET (POUR LES AVIS) ---
 // @desc    Récupérer TOUTES les commandes de l'utilisateur (même masquées)
 // @route   GET /api/orders/mypurchases
 // @access  Private
 router.get('/mypurchases', protect, async (req, res) => {
-  // On ne filtre PAS par isVisible: true pour avoir l'historique complet
   const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
   res.json(orders);
 });
-// --- FIN DE L'AJOUT ---
 
 // @desc    Récupérer une commande par ID
 // @route   GET /api/orders/:id
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
-  const order = await Order.findById(req.params.id).populate('user', 'name email');
-  if (order) {
-    if (req.user.isAdmin || order.user._id.toString() === req.user._id.toString()) {
-      res.json(order);
+  try {
+    const order = await Order.findById(req.params.id).populate('user', 'name email');
+    if (order) {
+      if (req.user.isAdmin || order.user._id.toString() === req.user._id.toString()) {
+        res.json(order);
+      } else {
+        res.status(401).json({ message: 'Non autorisé à voir cette commande' });
+      }
     } else {
-      res.status(401).json({ message: 'Non autorisé à voir cette commande' });
+      res.status(404).json({ message: 'Commande non trouvée' });
     }
-  } else {
-    res.status(404).json({ message: 'Commande non trouvée' });
+  } catch (error) {
+    console.error('Erreur lors de la récupération de la commande:', error);
+    res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
 
