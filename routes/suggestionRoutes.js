@@ -29,11 +29,10 @@ router.post('/', protect, asyncHandler(async (req, res) => {
       notificationId: uuidv4(),
       user: 'admin',
       message: `Nouvelle suggestion reçue de ${req.user.name}.`,
-      link: '/admin/suggestionlist', // Le lien vers la nouvelle page admin
+      link: '/admin/suggestionlist',
   };
   await Notification.create(newNotif);
   req.io.to('admin').emit('notification', newNotif);
-  // Émettre un événement spécifique pour rafraîchir la liste des suggestions admin en temps réel
   req.io.to('admin').emit('suggestion_update');
 
   res.status(201).json(createdSuggestion);
@@ -54,13 +53,14 @@ router.put('/:id', protect, asyncHandler(async (req, res) => {
   const suggestion = await Suggestion.findById(req.params.id);
 
   if (suggestion) {
-    // Vérifier que c'est bien l'utilisateur qui a posté la suggestion
     if (suggestion.user.toString() !== req.user._id.toString()) {
       res.status(401);
       throw new Error('Action non autorisée');
     }
     suggestion.text = req.body.text || suggestion.text;
     const updatedSuggestion = await suggestion.save();
+    // On notifie les admins que le contenu a changé
+    req.io.to('admin').emit('suggestion_update');
     res.json(updatedSuggestion);
   } else {
     res.status(404);
@@ -80,7 +80,7 @@ router.delete('/:id', protect, asyncHandler(async (req, res) => {
       throw new Error('Action non autorisée');
     }
     await suggestion.deleteOne();
-    req.io.to('admin').emit('suggestion_update'); // Rafraîchir la liste admin
+    req.io.to('admin').emit('suggestion_update');
     res.json({ message: 'Suggestion supprimée' });
   } else {
     res.status(404);
@@ -109,13 +109,17 @@ router.put('/:id/archive', protect, admin, asyncHandler(async (req, res) => {
     const isArchived = suggestion.archivedBy.includes(adminId);
 
     if (isArchived) {
-      // Si déjà archivé par cet admin, on le désarchive
       suggestion.archivedBy.pull(adminId);
     } else {
-      // Sinon, on l'archive
       suggestion.archivedBy.push(adminId);
     }
     await suggestion.save();
+    
+    // --- LA LIGNE MAGIQUE AJOUTÉE ICI ---
+    // On prévient tous les admins qu'un changement a eu lieu
+    req.io.to('admin').emit('suggestion_update');
+    // --- FIN DE L'AJOUT ---
+
     res.json(suggestion);
   } else {
     res.status(404);
