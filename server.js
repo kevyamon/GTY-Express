@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import { Server } from 'socket.io';
 import http from 'http';
-import rateLimit from 'express-rate-limit'; // --- NOUVEL IMPORT ---
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 import connectDB from './config/db.js';
@@ -22,6 +22,7 @@ import messageRoutes from './routes/messageRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
 import warningRoutes from './routes/warningRoutes.js';
+import suggestionRoutes from './routes/suggestionRoutes.js'; // --- NOUVEL IMPORT ---
 
 const port = process.env.PORT || 5000;
 
@@ -29,16 +30,13 @@ connectDB();
 
 const app = express();
 
-// --- CONFIGURATION DU RATE LIMITER ---
-// Applique le rate limiting à toutes les routes /api/
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limite chaque IP à 100 requêtes par fenêtre de 15 minutes
-  standardHeaders: true, // Renvoie les informations de limite dans les en-têtes `RateLimit-*`
-  legacyHeaders: false, // Désactive les en-têtes `X-RateLimit-*`
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use('/api', limiter);
-// --- FIN DE LA CONFIGURATION ---
 
 const corsOptions = {
   origin: process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
@@ -74,6 +72,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/warnings', warningRoutes);
+app.use('/api/suggestions', suggestionRoutes); // --- NOUVELLE ROUTE ---
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
