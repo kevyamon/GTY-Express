@@ -99,7 +99,8 @@ router.post('/', protect, async (req, res) => {
 // @route   GET /api/orders
 // @access  Private/Admin
 router.get('/', protect, admin, async (req, res) => {
-  const orders = await Order.find({}).populate('user', 'id name').sort({ createdAt: -1 });
+  // --- MODIFICATION : On ne retourne que les commandes non archivées par défaut ---
+  const orders = await Order.find({ isArchived: false }).populate('user', 'id name').sort({ createdAt: -1 });
   res.json(orders);
 });
 
@@ -140,7 +141,6 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// --- ROUTE DE MISE À JOUR ENTIÈREMENT CORRIGÉE ET AMÉLIORÉE ---
 // @desc    Mettre à jour le statut ou le paiement (Admin)
 // @route   PUT /api/orders/:id/status
 // @access  Private/Admin
@@ -155,7 +155,6 @@ router.put('/:id/status', protect, admin, async (req, res) => {
     let hasChanged = false;
     const customer = await User.findById(order.user);
 
-    // Gérer le changement de statut de la commande
     if (req.body.status && req.body.status !== order.status) {
       order.status = req.body.status;
       hasChanged = true;
@@ -175,7 +174,6 @@ router.put('/:id/status', protect, admin, async (req, res) => {
         order.deliveredAt = Date.now();
       }
 
-      // Envoyer la notification et l'email pour le statut
       const newNotif = {
           notificationId: uuidv4(),
           user: order.user,
@@ -190,13 +188,11 @@ router.put('/:id/status', protect, admin, async (req, res) => {
       }
     }
 
-    // Gérer le changement de statut de paiement
     if (req.body.isPaid === true && !order.isPaid) {
       order.isPaid = true;
       order.paidAt = Date.now();
       hasChanged = true;
       
-      // BONUS : Envoyer une notification pour le paiement
       const paymentNotif = {
         notificationId: uuidv4(),
         user: order.user,
@@ -207,14 +203,13 @@ router.put('/:id/status', protect, admin, async (req, res) => {
       req.io.to(order.user.toString()).emit('notification', paymentNotif);
     }
 
-    // Sauvegarder uniquement si quelque chose a changé
     if (hasChanged) {
       const updatedOrder = await order.save();
       req.io.to(order.user.toString()).emit('order_update', { orderId: order._id });
       req.io.to('admin').emit('order_update', { orderId: order._id });
       res.json(updatedOrder);
     } else {
-      res.json(order); // Renvoyer la commande sans modification si rien n'a changé
+      res.json(order);
     }
 
   } catch (error) {
@@ -222,6 +217,29 @@ router.put('/:id/status', protect, admin, async (req, res) => {
     res.status(500).json({ message: 'Erreur du serveur' });
   }
 });
+
+// --- NOUVELLE ROUTE POUR L'ARCHIVAGE ---
+// @desc    Archiver/Désarchiver une commande (Admin)
+// @route   PUT /api/orders/:id/archive
+// @access  Private/Admin
+router.put('/:id/archive', protect, admin, async (req, res) => {
+    try {
+        const order = await Order.findById(req.params.id);
+
+        if (order) {
+            order.isArchived = !order.isArchived; // On inverse la valeur actuelle
+            await order.save();
+            req.io.to('admin').emit('order_update', { orderId: order._id });
+            res.json({ message: `Commande ${order.isArchived ? 'archivée' : 'désarchivée'}` });
+        } else {
+            res.status(404).json({ message: 'Commande non trouvée' });
+        }
+    } catch (error) {
+        console.error("Erreur lors de l'archivage de la commande:", error);
+        res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+// --- FIN DE LA NOUVELLE ROUTE ---
 
 // @desc    Mettre à jour une commande comme "Payée" (Client)
 // @route   PUT /api/orders/:id/pay

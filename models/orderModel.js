@@ -31,14 +31,12 @@ const orderSchema = mongoose.Schema(
     shippingPrice: { type: Number, required: true, default: 0.0 },
     totalPrice: { type: Number, required: true, default: 0.0 },
 
-    // --- AJOUT POUR LA GESTION DES COUPONS ---
     coupon: {
       code: { type: String },
       discountType: { type: String, enum: ['percentage', 'fixed'] },
       discountAmount: { type: Number },
       priceBeforeDiscount: { type: Number },
     },
-    // --- FIN DE L'AJOUT ---
 
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
@@ -49,11 +47,18 @@ const orderSchema = mongoose.Schema(
       default: 'En attente',
     },
     deliveredAt: { type: Date },
-    // --- AJOUT POUR LA SUPPRESSION DOUCE ---
+    
     isVisible: {
       type: Boolean,
       required: true,
       default: true,
+    },
+    
+    // --- AJOUT POUR L'ARCHIVAGE ADMIN ---
+    isArchived: {
+      type: Boolean,
+      required: true,
+      default: false,
     },
     // --- FIN DE L'AJOUT ---
   },
