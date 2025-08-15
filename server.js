@@ -33,9 +33,7 @@ connectDB();
 
 const app = express();
 
-// --- CORRECTION : FAIRE CONFIANCE AU PROXY DE RENDER ---
 app.set('trust proxy', 1);
-// --- FIN DE LA CORRECTION ---
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -92,12 +90,11 @@ io.on('connection', (socket) => {
   });
 });
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
+// --- ROUTE DE VERSION CORRIGÉE POUR ÊTRE PLUS ROBUSTE ---
 app.get('/api/version', async (req, res) => {
   try {
-    const packageJsonPath = path.resolve(__dirname, '..', 'package.json');
+    // Utilise le répertoire de travail actuel pour trouver le package.json
+    const packageJsonPath = path.resolve(process.cwd(), 'package.json');
     const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
     const { version } = JSON.parse(packageJsonData);
     res.json({ version, deployedAt: serverStartTime.toISOString() });
@@ -106,6 +103,7 @@ app.get('/api/version', async (req, res) => {
     res.status(500).json({ message: "Impossible de lire la version de l'application" });
   }
 });
+// --- FIN DE LA CORRECTION ---
 
 app.get('/', (req, res) => {
   res.send("L'API GTY Express est en cours d'exécution...");
