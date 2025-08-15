@@ -30,6 +30,16 @@ const orderSchema = mongoose.Schema(
     taxPrice: { type: Number, required: true, default: 0.0 },
     shippingPrice: { type: Number, required: true, default: 0.0 },
     totalPrice: { type: Number, required: true, default: 0.0 },
+
+    // --- AJOUT POUR LA GESTION DES COUPONS ---
+    coupon: {
+      code: { type: String },
+      discountType: { type: String, enum: ['percentage', 'fixed'] },
+      discountAmount: { type: Number },
+      priceBeforeDiscount: { type: Number },
+    },
+    // --- FIN DE L'AJOUT ---
+
     isPaid: { type: Boolean, required: true, default: false },
     paidAt: { type: Date },
     status: {

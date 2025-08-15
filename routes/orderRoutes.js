@@ -3,21 +3,67 @@ const router = express.Router();
 import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import User from '../models/userModel.js';
+// --- NOUVEL IMPORT ---
+import PromoBanner from '../models/promoBannerModel.js';
+// --- FIN DE L'IMPORT ---
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
 import { v4 as uuidv4 } from 'uuid';
 import { sendOrderConfirmationEmail, sendStatusUpdateEmail } from '../utils/emailService.js';
+
+// --- NOUVELLE ROUTE POUR VALIDER UN COUPON ---
+// @desc    Valider un code coupon
+// @route   POST /api/orders/validate-coupon
+// @access  Private
+router.post('/validate-coupon', protect, async (req, res) => {
+  try {
+    const { couponCode } = req.body;
+    if (!couponCode) {
+      return res.status(400).json({ message: 'Le code du coupon est requis.' });
+    }
+
+    // 1. Trouver la bannière active
+    const activeBanner = await PromoBanner.findOne({ isActive: true });
+
+    // 2. Vérifier si la bannière existe et n'est pas expirée
+    if (!activeBanner || new Date() > new Date(activeBanner.endDate)) {
+      return res.status(404).json({ message: 'Coupon invalide ou expiré.' });
+    }
+
+    // 3. Chercher le coupon dans la bannière
+    const coupon = activeBanner.coupons.find(c => c.code === couponCode);
+
+    if (coupon) {
+      // Si le coupon est trouvé, renvoyer ses détails
+      res.json({
+        code: coupon.code,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+      });
+    } else {
+      // Si le coupon n'est pas trouvé dans la bannière active
+      res.status(404).json({ message: 'Coupon invalide ou expiré.' });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Erreur du serveur' });
+  }
+});
+// --- FIN DE LA NOUVELLE ROUTE ---
 
 // @desc    Créer une nouvelle commande
 // @route   POST /api/orders
 // @access  Private
 router.post('/', protect, async (req, res) => {
   try {
-    const { orderItems, shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice } = req.body;
+    // On déstructure le coupon du corps de la requête
+    const { orderItems, shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice, coupon } = req.body;
+    
     if (orderItems && orderItems.length === 0) {
       return res.status(400).json({ message: 'Aucun article dans la commande' });
     }
-    const order = new Order({
+
+    const orderData = {
       orderItems: orderItems.map((x) => ({
         ...x,
         product: x._id,
@@ -25,8 +71,25 @@ router.post('/', protect, async (req, res) => {
         image: (x.images && x.images.length > 0) ? x.images[0] : x.image,
       })),
       user: req.user._id,
-      shippingAddress, paymentMethod, itemsPrice, taxPrice, shippingPrice, totalPrice,
-    });
+      shippingAddress,
+      paymentMethod,
+      itemsPrice,
+      taxPrice,
+      shippingPrice,
+      totalPrice,
+    };
+
+    // Si un coupon est appliqué, on l'ajoute aux données de la commande
+    if (coupon && coupon.code) {
+      orderData.coupon = {
+        code: coupon.code,
+        discountType: coupon.discountType,
+        discountAmount: coupon.discountAmount,
+        priceBeforeDiscount: coupon.priceBeforeDiscount,
+      };
+    }
+
+    const order = new Order(orderData);
     const createdOrder = await order.save();
 
     sendOrderConfirmationEmail(createdOrder, req.user);
