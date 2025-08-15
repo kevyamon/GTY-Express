@@ -6,8 +6,10 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import http from 'http';
 import rateLimit from 'express-rate-limit';
-// --- MODIFICATION : On importe directement le package.json ---
-import pkg from './package.json' assert { type: 'json' };
+// --- MODIFICATION : On importe les modules pour lire les fichiers ---
+import { fileURLToPath } from 'url';
+import { promises as fs } from 'fs';
+// --- FIN DE LA MODIFICATION ---
 
 dotenv.config();
 import connectDB from './config/db.js';
@@ -88,12 +90,18 @@ io.on('connection', (socket) => {
   });
 });
 
-// --- ROUTE DE VERSION SIMPLIFIÉE ET FIABILISÉE ---
-app.get('/api/version', (req, res) => {
+// --- ROUTE DE VERSION CORRIGÉE AVEC UNE MÉTHODE FIABLE ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+app.get('/api/version', async (req, res) => {
   try {
-    const { version } = pkg;
+    const packageJsonPath = path.resolve(__dirname, '..', 'package.json'); // Utilisation de path.resolve pour plus de robustesse
+    const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
+    const { version } = JSON.parse(packageJsonData);
     res.json({ version, deployedAt: serverStartTime.toISOString() });
   } catch (error) {
+    console.error("Erreur de lecture de la version:", error);
     res.status(500).json({ message: "Impossible de lire la version de l'application" });
   }
 });
@@ -112,4 +120,4 @@ app.use(errorHandler);
 
 server.listen(port, () =>
   console.log(`Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
-);
+)
