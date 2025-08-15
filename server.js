@@ -22,7 +22,7 @@ import messageRoutes from './routes/messageRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
 import warningRoutes from './routes/warningRoutes.js';
-import suggestionRoutes from './routes/suggestionRoutes.js'; // --- NOUVEL IMPORT ---
+import suggestionRoutes from './routes/suggestionRoutes.js';
 
 const port = process.env.PORT || 5000;
 
@@ -72,7 +72,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/warnings', warningRoutes);
-app.use('/api/suggestions', suggestionRoutes); // --- NOUVELLE ROUTE ---
+app.use('/api/suggestions', suggestionRoutes);
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
@@ -91,9 +91,14 @@ app.get('/', (req, res) => {
   res.send('L\'API GTY Express est en cours d\'exécution...');
 });
 
+// --- NOUVELLE ROUTE POUR LE PING (CRON JOB) ---
+app.get('/ping', (req, res) => {
+  res.status(200).json({ message: 'pong' });
+});
+
 app.use(notFound);
 app.use(errorHandler);
 
 server.listen(port, () =>
-  console.log(`--- VERSION DE TEST DEPLOIEMENT v1.1 --- Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
+  console.log(`Le serveur tourne en mode ${process.env.NODE_ENV} sur le port ${port}`)
 );
