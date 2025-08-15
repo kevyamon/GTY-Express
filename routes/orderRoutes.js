@@ -55,16 +55,24 @@ router.get('/', protect, admin, async (req, res) => {
   res.json(orders);
 });
 
-// --- CORRECTION : La route spécifique '/myorders' est maintenant AVANT la route générique '/:id' ---
-// @desc    Récupérer les commandes de l'utilisateur connecté
+// @desc    Récupérer les commandes visibles de l'utilisateur
 // @route   GET /api/orders/myorders
 // @access  Private
 router.get('/myorders', protect, async (req, res) => {
-  // --- MODIFIÉ POUR NE MONTRER QUE LES COMMANDES VISIBLES ---
   const orders = await Order.find({ user: req.user._id, isVisible: true }).sort({ createdAt: -1 });
   res.json(orders);
 });
-// --- FIN DE LA CORRECTION ---
+
+// --- NOUVELLE ROUTE POUR L'HISTORIQUE COMPLET (POUR LES AVIS) ---
+// @desc    Récupérer TOUTES les commandes de l'utilisateur (même masquées)
+// @route   GET /api/orders/mypurchases
+// @access  Private
+router.get('/mypurchases', protect, async (req, res) => {
+  // On ne filtre PAS par isVisible: true pour avoir l'historique complet
+  const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
+  res.json(orders);
+});
+// --- FIN DE L'AJOUT ---
 
 // @desc    Récupérer une commande par ID
 // @route   GET /api/orders/:id
@@ -72,7 +80,6 @@ router.get('/myorders', protect, async (req, res) => {
 router.get('/:id', protect, async (req, res) => {
   const order = await Order.findById(req.params.id).populate('user', 'name email');
   if (order) {
-    // On vérifie si l'utilisateur est admin OU si c'est bien sa commande
     if (req.user.isAdmin || order.user._id.toString() === req.user._id.toString()) {
       res.json(order);
     } else {
@@ -103,7 +110,7 @@ router.put('/:id/status', protect, admin, async (req, res) => {
           }
         }
         if (req.body.status === 'Livrée') {
-          order.deliveredAt = Date.now(); // Mise à jour de la date de livraison
+          order.deliveredAt = Date.now();
         }
         const newNotif = {
             notificationId: uuidv4(),
@@ -200,7 +207,6 @@ router.put('/:id/cancel', protect, async (req, res) => {
 router.delete('/:id', protect, async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (order && (req.user.isAdmin || order.user.toString() === req.user._id.toString())) {
-      // --- MODIFIÉ POUR LA SUPPRESSION DOUCE ---
       order.isVisible = false;
       await order.save();
       res.json({ message: 'Commande masquée de votre historique' });
