@@ -32,6 +32,56 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json(products);
 }));
 
+// --- NOUVELLE ROUTE POUR LES PRODUITS LES MIEUX NOTÉS ---
+// @desc    Get top rated products
+// @route   GET /api/products/top
+// @access  Public
+router.get('/top', asyncHandler(async (req, res) => {
+  // On cherche les produits avec une note supérieure ou égale à 4,
+  // on les classe par note décroissante et on ne garde que les 5 premiers.
+  const products = await Product.find({ rating: { $gte: 4 } })
+    .sort({ rating: -1 })
+    .limit(5);
+  res.json(products);
+}));
+// --- FIN DE L'AJOUT ---
+
+// --- NOUVELLE ROUTE POUR LES PRODUITS POPULAIRES (LES PLUS VENDUS) ---
+// @desc    Get most popular products
+// @route   GET /api/products/popular
+// @access  Public
+router.get('/popular', asyncHandler(async (req, res) => {
+  // 1. On analyse toutes les commandes "Livrée" pour compter les produits vendus
+  const popularProductsIds = await Order.aggregate([
+    // On ne prend que les commandes qui ont bien été livrées
+    { $match: { status: 'Livrée' } },
+    // On "déplie" le tableau des articles pour traiter chaque article individuellement
+    { $unwind: '$orderItems' },
+    // On groupe par ID de produit et on fait la somme des quantités vendues
+    {
+      $group: {
+        _id: '$orderItems.product',
+        totalSold: { $sum: '$orderItems.qty' },
+      },
+    },
+    // On classe par total vendu, du plus grand au plus petit
+    { $sort: { totalSold: -1 } },
+    // On ne garde que les 10 produits les plus populaires
+    { $limit: 10 },
+    // On ne garde que l'ID pour la prochaine étape
+    { $project: { _id: 1 } }
+  ]);
+
+  // On extrait juste les IDs du résultat
+  const productIds = popularProductsIds.map(p => p._id);
+
+  // 2. On récupère les détails complets de ces produits populaires
+  const products = await Product.find({ _id: { $in: productIds } });
+
+  res.json(products);
+}));
+// --- FIN DE L'AJOUT ---
+
 // @desc    Fetch single product
 // @route   GET /api/products/:id
 // @access  Public
