@@ -8,7 +8,7 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 import Notification from '../models/notificationModel.js';
 import { v4 as uuidv4 } from 'uuid';
 import { sendOrderConfirmationEmail, sendStatusUpdateEmail } from '../utils/emailService.js';
-import asyncHandler from '../middleware/asyncHandler.js'; // AJOUT DE L'IMPORT
+import asyncHandler from '../middleware/asyncHandler.js';
 
 // @desc    Valider un code coupon
 // @route   POST /api/orders/validate-coupon
@@ -98,6 +98,16 @@ router.get('/', protect, admin, asyncHandler(async (req, res) => {
   res.json(orders);
 }));
 
+// --- NOUVELLE ROUTE AJOUTÉE ---
+// @desc    Récupérer les commandes archivées (Admin)
+// @route   GET /api/orders/archived
+// @access  Private/Admin
+router.get('/archived', protect, admin, asyncHandler(async (req, res) => {
+    const orders = await Order.find({ isArchived: true }).populate('user', 'id name').sort({ createdAt: -1 });
+    res.json(orders);
+}));
+// --- FIN DE L'AJOUT ---
+
 // @desc    Récupérer les commandes visibles de l'utilisateur
 // @route   GET /api/orders/myorders
 // @access  Private
@@ -135,9 +145,7 @@ router.get('/:id', protect, asyncHandler(async (req, res) => {
 // @desc    Mettre à jour le statut ou le paiement (Admin)
 // @route   PUT /api/orders/:id/status
 // @access  Private/Admin
-// --- ROUTE ENTIÈREMENT CORRIGÉE ---
 router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
-    // On récupère la commande et on peuple directement l'utilisateur associé
     const order = await Order.findById(req.params.id).populate('user', 'name email');
 
     if (!order) {
@@ -146,7 +154,6 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
     }
 
     let hasChanged = false;
-    // La variable customer est maintenant order.user (qui peut être null si le client a été supprimé)
     const customer = order.user; 
 
     if (req.body.status && req.body.status !== order.status) {
@@ -168,7 +175,6 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
             order.deliveredAt = Date.now();
         }
 
-        // On vérifie que le client existe avant de tenter de lui envoyer une notification ou un email
         if (customer) {
             const newNotif = {
                 notificationId: uuidv4(),
@@ -210,7 +216,6 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
         res.json(order);
     }
 }));
-// --- FIN DE LA CORRECTION ---
 
 // @desc    Archiver/Désarchiver une commande (Admin)
 // @route   PUT /api/orders/:id/archive
@@ -219,7 +224,7 @@ router.put('/:id/archive', protect, admin, asyncHandler(async (req, res) => {
     const order = await Order.findById(req.params.id);
 
     if (order) {
-        order.isArchived = !order.isArchived; // On inverse la valeur actuelle
+        order.isArchived = !order.isArchived; 
         await order.save();
         req.io.to('admin').emit('order_update', { orderId: order._id });
         res.json({ message: `Commande ${order.isArchived ? 'archivée' : 'désarchivée'}` });
