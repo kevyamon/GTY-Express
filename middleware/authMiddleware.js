@@ -12,12 +12,14 @@ const protect = async (req, res, next) => {
       next();
     } catch (error) {
       console.error(error);
-      res.status(401).send('Not authorized, token failed');
+      // --- CORRECTION : On envoie une réponse JSON ---
+      res.status(401).json({ message: 'Non autorisé, le token a échoué' });
     }
   }
 
   if (!token) {
-    res.status(401).send('Not authorized, no token');
+    // --- CORRECTION : On envoie une réponse JSON ---
+    res.status(401).json({ message: 'Non autorisé, pas de token' });
   }
 };
 
@@ -25,7 +27,8 @@ const admin = (req, res, next) => {
   if (req.user && req.user.isAdmin) {
     next();
   } else {
-    res.status(401).send('Not authorized as an admin');
+    // --- CORRECTION : On envoie une réponse JSON ---
+    res.status(401).json({ message: 'Action non autorisée pour votre rôle' });
   }
 };
 
