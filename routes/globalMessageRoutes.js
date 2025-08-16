@@ -36,6 +36,13 @@ router.post('/', protect, admin, asyncHandler(async (req, res) => {
 // @route   GET /api/global-messages/active
 // @access  Private
 router.get('/active', protect, asyncHandler(async (req, res) => {
+  // --- CORRECTION AJOUTÉE ICI ---
+  // Si l'utilisateur est un admin, on ne lui envoie jamais de message global.
+  if (req.user.isAdmin) {
+    return res.json(null);
+  }
+  // --- FIN DE LA CORRECTION ---
+
   // On cherche le message actif que l'utilisateur n'a PAS encore fermé
   const message = await GlobalMessage.findOne({
     status: 'active',
