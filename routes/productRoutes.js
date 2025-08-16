@@ -6,14 +6,10 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 
 // --- ROUTE PRINCIPALE AMÉLIORÉE ---
-// @desc    Fetch products with advanced filtering
-// @route   GET /api/products
-// @access  Public
 router.get('/', asyncHandler(async (req, res) => {
   const { keyword, category, promotion, pageType } = req.query;
   const filter = {};
 
-  // Logique de filtrage existante
   if (keyword) {
     filter.name = { $regex: keyword, $options: 'i' };
   }
@@ -21,17 +17,14 @@ router.get('/', asyncHandler(async (req, res) => {
     filter.category = 'Supermarché';
   } else if (category && category !== 'all' && category !== 'general') {
     filter.category = category;
-  } else if (category !== 'all' && !isSupermarket && !pageType) { // Ne s'applique pas au supermarché ou aux pages spéciales
-    filter.category = { $ne: 'Supermarché' };
   }
   if (promotion === 'true') {
     filter.promotion = { $exists: true, $ne: null };
   }
 
   // --- NOUVELLE LOGIQUE POUR LA GRILLE NORMALE ---
-  // Si on demande la grille principale, on exclut les produits populaires et mieux notés.
   if (pageType === 'mainGrid') {
-    // 1. Trouver les IDs des produits populaires
+    // 1. Trouver les IDs des produits populaires (ceux qui ont été livrés)
     const popularProductsIds = await Order.aggregate([
       { $match: { status: 'Livrée' } },
       { $unwind: '$orderItems' },
@@ -48,6 +41,9 @@ router.get('/', asyncHandler(async (req, res) => {
 
     // 4. Ajouter la condition d'exclusion au filtre principal
     filter._id = { $nin: idsToExclude };
+    
+    // --- CORRECTION 1 : On exclut les produits du supermarché de la grille principale ---
+    filter.category = { $ne: 'Supermarché' };
   }
   
   const products = await Product.find({ ...filter }).sort({ createdAt: -1 });
@@ -55,11 +51,8 @@ router.get('/', asyncHandler(async (req, res) => {
 }));
 
 // --- ROUTE "MIEUX NOTÉS" MISE À JOUR ---
-// @desc    Get top rated products (all or limited)
-// @route   GET /api/products/top
-// @access  Public
 router.get('/top', asyncHandler(async (req, res) => {
-  const limit = req.query.limit ? parseInt(req.query.limit) : 0; // 0 = pas de limite
+  const limit = req.query.limit ? parseInt(req.query.limit) : 0;
   
   const query = Product.find({ rating: { $gte: 4 } }).sort({ rating: -1 });
 
@@ -72,9 +65,6 @@ router.get('/top', asyncHandler(async (req, res) => {
 }));
 
 // --- ROUTE "POPULAIRES" MISE À JOUR ---
-// @desc    Get most popular products (all or limited)
-// @route   GET /api/products/popular
-// @access  Public
 router.get('/popular', asyncHandler(async (req, res) => {
   const limit = req.query.limit ? parseInt(req.query.limit) : 0;
 
@@ -98,13 +88,21 @@ router.get('/popular', asyncHandler(async (req, res) => {
   
   const popularProductsIds = await Order.aggregate(aggregatePipeline);
   const productIds = popularProductsIds.map(p => p._id);
+  
+  // --- CORRECTION 2 : S'il n'y a aucun produit populaire, on retourne un tableau vide ---
+  if (productIds.length === 0) {
+    return res.json([]);
+  }
+  
   const products = await Product.find({ _id: { $in: productIds } });
+  
+  // On doit trier les produits dans le même ordre que les IDs triés par popularité
+  const sortedProducts = productIds.map(id => products.find(p => p._id.equals(id))).filter(Boolean);
 
-  res.json(products);
+  res.json(sortedProducts);
 }));
 
-
-// --- Les autres routes restent inchangées ---
+// Le reste du fichier est inchangé...
 
 // @desc    Fetch single product
 // @route   GET /api/products/:id
