@@ -8,6 +8,8 @@ import http from 'http';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { promises as fs } from 'fs';
+// --- MODIFICATION : On importe un module natif de Node.js pour exécuter une commande ---
+import { execSync } from 'child_process';
 
 dotenv.config();
 import connectDB from './config/db.js';
@@ -25,7 +27,6 @@ import adminRoutes from './routes/adminRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
 import warningRoutes from './routes/warningRoutes.js';
 import suggestionRoutes from './routes/suggestionRoutes.js';
-// --- NOUVEL IMPORT AJOUTÉ ---
 import globalMessageRoutes from './routes/globalMessageRoutes.js';
 
 const serverStartTime = new Date();
@@ -80,7 +81,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/warnings', warningRoutes);
 app.use('/api/suggestions', suggestionRoutes);
-// --- NOUVELLE ROUTE UTILISÉE ---
 app.use('/api/global-messages', globalMessageRoutes);
 
 
@@ -98,12 +98,25 @@ io.on('connection', (socket) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- MODIFICATION : Nouvelle fonction pour récupérer le hash Git ---
+const getGitCommitHash = () => {
+  try {
+    // On exécute la commande git pour obtenir l'ID du dernier commit et on nettoie le résultat.
+    return execSync('git rev-parse HEAD').toString().trim();
+  } catch (e) {
+    console.error('Impossible de récupérer le hash du commit git:', e);
+    return 'unknown'; // Valeur de secours si git n'est pas disponible
+  }
+};
+
 app.get('/api/version', async (req, res) => {
   try {
     const packageJsonPath = path.resolve(process.cwd(), 'package.json');
     const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
     const { version } = JSON.parse(packageJsonData);
-    res.json({ version, deployedAt: serverStartTime.toISOString() });
+    // --- MODIFICATION : On ajoute le hash du commit à notre réponse ---
+    const commitHash = getGitCommitHash();
+    res.json({ version, commitHash });
   } catch (error) {
     console.error("Erreur de lecture de la version:", error);
     res.status(500).json({ message: "Impossible de lire la version de l'application" });
