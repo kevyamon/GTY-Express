@@ -25,6 +25,8 @@ import adminRoutes from './routes/adminRoutes.js';
 import complaintRoutes from './routes/complaintRoutes.js';
 import warningRoutes from './routes/warningRoutes.js';
 import suggestionRoutes from './routes/suggestionRoutes.js';
+// --- NOUVEL IMPORT AJOUTÉ ---
+import globalMessageRoutes from './routes/globalMessageRoutes.js';
 
 const serverStartTime = new Date();
 const port = process.env.PORT || 5000;
@@ -33,7 +35,6 @@ connectDB();
 
 const app = express();
 
-// --- CORRECTION : Faire confiance au proxy de Render ---
 app.set('trust proxy', 1);
 
 const limiter = rateLimit({
@@ -79,6 +80,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/complaints', complaintRoutes);
 app.use('/api/warnings', warningRoutes);
 app.use('/api/suggestions', suggestionRoutes);
+// --- NOUVELLE ROUTE UTILISÉE ---
+app.use('/api/global-messages', globalMessageRoutes);
+
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);
@@ -94,10 +98,8 @@ io.on('connection', (socket) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- ROUTE DE VERSION CORRIGÉE POUR ÊTRE PLUS ROBUSTE ---
 app.get('/api/version', async (req, res) => {
   try {
-    // Utilise le répertoire de travail actuel pour trouver le package.json
     const packageJsonPath = path.resolve(process.cwd(), 'package.json');
     const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
     const { version } = JSON.parse(packageJsonData);
@@ -107,7 +109,6 @@ app.get('/api/version', async (req, res) => {
     res.status(500).json({ message: "Impossible de lire la version de l'application" });
   }
 });
-// --- FIN DE LA CORRECTION ---
 
 app.get('/', (req, res) => {
   res.send("L'API GTY Express est en cours d'exécution...");
