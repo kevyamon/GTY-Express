@@ -1,86 +1,110 @@
 import express from 'express';
 const router = express.Router();
 import Product from '../models/productModel.js';
-import Order from '../models/orderModel.js'; // NOUVEL IMPORT
+import Order from '../models/orderModel.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 
-// @desc    Fetch all products
+// --- ROUTE PRINCIPALE AMÉLIORÉE ---
+// @desc    Fetch products with advanced filtering
 // @route   GET /api/products
 // @access  Public
 router.get('/', asyncHandler(async (req, res) => {
-  const { keyword, category, promotion } = req.query;
+  const { keyword, category, promotion, pageType } = req.query;
   const filter = {};
 
+  // Logique de filtrage existante
   if (keyword) {
     filter.name = { $regex: keyword, $options: 'i' };
   }
-
   if (category === 'supermarket') {
     filter.category = 'Supermarché';
   } else if (category && category !== 'all' && category !== 'general') {
     filter.category = category;
-  } else if (category !== 'all') {
+  } else if (category !== 'all' && !isSupermarket && !pageType) { // Ne s'applique pas au supermarché ou aux pages spéciales
     filter.category = { $ne: 'Supermarché' };
   }
-
   if (promotion === 'true') {
     filter.promotion = { $exists: true, $ne: null };
   }
 
+  // --- NOUVELLE LOGIQUE POUR LA GRILLE NORMALE ---
+  // Si on demande la grille principale, on exclut les produits populaires et mieux notés.
+  if (pageType === 'mainGrid') {
+    // 1. Trouver les IDs des produits populaires
+    const popularProductsIds = await Order.aggregate([
+      { $match: { status: 'Livrée' } },
+      { $unwind: '$orderItems' },
+      { $group: { _id: '$orderItems.product' } },
+    ]);
+    const popularIds = popularProductsIds.map(p => p._id);
+
+    // 2. Trouver les IDs des produits mieux notés
+    const topRatedProducts = await Product.find({ rating: { $gte: 4 } }).select('_id');
+    const topRatedIds = topRatedProducts.map(p => p._id);
+
+    // 3. Fusionner les listes d'IDs à exclure
+    const idsToExclude = [...new Set([...popularIds, ...topRatedIds])];
+
+    // 4. Ajouter la condition d'exclusion au filtre principal
+    filter._id = { $nin: idsToExclude };
+  }
+  
   const products = await Product.find({ ...filter }).sort({ createdAt: -1 });
   res.json(products);
 }));
 
-// --- NOUVELLE ROUTE POUR LES PRODUITS LES MIEUX NOTÉS ---
-// @desc    Get top rated products
+// --- ROUTE "MIEUX NOTÉS" MISE À JOUR ---
+// @desc    Get top rated products (all or limited)
 // @route   GET /api/products/top
 // @access  Public
 router.get('/top', asyncHandler(async (req, res) => {
-  // On cherche les produits avec une note supérieure ou égale à 4,
-  // on les classe par note décroissante et on ne garde que les 5 premiers.
-  const products = await Product.find({ rating: { $gte: 4 } })
-    .sort({ rating: -1 })
-    .limit(5);
+  const limit = req.query.limit ? parseInt(req.query.limit) : 0; // 0 = pas de limite
+  
+  const query = Product.find({ rating: { $gte: 4 } }).sort({ rating: -1 });
+
+  if (limit > 0) {
+    query.limit(limit);
+  }
+
+  const products = await query;
   res.json(products);
 }));
-// --- FIN DE L'AJOUT ---
 
-// --- NOUVELLE ROUTE POUR LES PRODUITS POPULAIRES (LES PLUS VENDUS) ---
-// @desc    Get most popular products
+// --- ROUTE "POPULAIRES" MISE À JOUR ---
+// @desc    Get most popular products (all or limited)
 // @route   GET /api/products/popular
 // @access  Public
 router.get('/popular', asyncHandler(async (req, res) => {
-  // 1. On analyse toutes les commandes "Livrée" pour compter les produits vendus
-  const popularProductsIds = await Order.aggregate([
-    // On ne prend que les commandes qui ont bien été livrées
+  const limit = req.query.limit ? parseInt(req.query.limit) : 0;
+
+  const aggregatePipeline = [
     { $match: { status: 'Livrée' } },
-    // On "déplie" le tableau des articles pour traiter chaque article individuellement
     { $unwind: '$orderItems' },
-    // On groupe par ID de produit et on fait la somme des quantités vendues
     {
       $group: {
         _id: '$orderItems.product',
         totalSold: { $sum: '$orderItems.qty' },
       },
     },
-    // On classe par total vendu, du plus grand au plus petit
     { $sort: { totalSold: -1 } },
-    // On ne garde que les 10 produits les plus populaires
-    { $limit: 10 },
-    // On ne garde que l'ID pour la prochaine étape
-    { $project: { _id: 1 } }
-  ]);
+  ];
 
-  // On extrait juste les IDs du résultat
+  if (limit > 0) {
+    aggregatePipeline.push({ $limit: limit });
+  }
+
+  aggregatePipeline.push({ $project: { _id: 1 } });
+  
+  const popularProductsIds = await Order.aggregate(aggregatePipeline);
   const productIds = popularProductsIds.map(p => p._id);
-
-  // 2. On récupère les détails complets de ces produits populaires
   const products = await Product.find({ _id: { $in: productIds } });
 
   res.json(products);
 }));
-// --- FIN DE L'AJOUT ---
+
+
+// --- Les autres routes restent inchangées ---
 
 // @desc    Fetch single product
 // @route   GET /api/products/:id
@@ -147,7 +171,6 @@ router.delete('/:id', protect, admin, asyncHandler(async (req, res) => {
   }
 }));
 
-// --- ROUTE POUR LES AVIS SÉCURISÉE ---
 // @desc    Create a new review
 // @route   POST /api/products/:id/reviews
 // @access  Private
@@ -156,7 +179,6 @@ router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
     const product = await Product.findById(req.params.id);
 
     if (product) {
-      // VÉRIFICATION 1 : L'utilisateur a-t-il déjà commenté ?
       const alreadyReviewed = product.reviews.find(
         (r) => r.user.toString() === req.user._id.toString()
       );
@@ -166,7 +188,6 @@ router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
         throw new Error('Vous avez déjà commenté ce produit');
       }
 
-      // VÉRIFICATION 2 : L'utilisateur a-t-il acheté et reçu ce produit ?
       const deliveredOrders = await Order.find({
         user: req.user._id,
         status: 'Livrée',
@@ -174,7 +195,7 @@ router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
       });
 
       if (deliveredOrders.length === 0) {
-        res.status(403); // 403 Forbidden = non autorisé
+        res.status(403);
         throw new Error("Vous ne pouvez laisser un avis que sur les produits que vous avez reçus.");
       }
 
