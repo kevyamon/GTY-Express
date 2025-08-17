@@ -144,7 +144,6 @@ router.get('/:id', protect, asyncHandler(async (req, res) => {
 // @route   PUT /api/orders/:id/status
 // @access  Private/Admin
 router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
-    // --- CORRECTION : On s'assure de toujours avoir les informations complètes de l'utilisateur ---
     const order = await Order.findById(req.params.id).populate('user', 'name email phone');
 
     if (!order) {
@@ -174,7 +173,6 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
             order.deliveredAt = Date.now();
         }
 
-        // --- CORRECTION : On vérifie que 'customer' n'est pas null avant de l'utiliser ---
         if (customer && customer._id) {
             const newNotif = {
                 notificationId: uuidv4(),
@@ -184,6 +182,7 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
             };
             await Notification.create(newNotif);
             req.io.to(customer._id.toString()).emit('notification', newNotif);
+            // --- CORRECTION : La ligne suivante a été déplacée ici ---
             sendStatusUpdateEmail(order, customer);
         }
     }
@@ -193,7 +192,6 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
         order.paidAt = Date.now();
         hasChanged = true;
       
-        // --- CORRECTION : On vérifie que 'customer' n'est pas null avant de l'utiliser ---
         if (customer && customer._id) {
             const paymentNotif = {
                 notificationId: uuidv4(),
