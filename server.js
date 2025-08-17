@@ -8,7 +8,6 @@ import http from 'http';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url';
 import { promises as fs } from 'fs';
-// --- MODIFICATION : On importe un module natif de Node.js pour exécuter une commande ---
 import { execSync } from 'child_process';
 
 dotenv.config();
@@ -38,6 +37,19 @@ const app = express();
 
 app.set('trust proxy', 1);
 
+// --- MODIFICATION : On autorise maintenant le localhost en plus du site de production ---
+const corsOptions = {
+  origin: [
+    process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
+    'http://localhost:5173', // Port par défaut de Vite
+    'http://localhost:3000'  // Autre port courant pour le développement
+  ],
+  credentials: true,
+};
+app.use(cors(corsOptions));
+// --- FIN DE LA MODIFICATION ---
+
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -46,16 +58,14 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
-  credentials: true,
-};
-app.use(cors(corsOptions));
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
+    origin: [ // On met à jour ici aussi pour Socket.IO
+      process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ],
     methods: ['GET', 'POST'],
   },
 });
@@ -98,14 +108,12 @@ io.on('connection', (socket) => {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- MODIFICATION : Nouvelle fonction pour récupérer le hash Git ---
 const getGitCommitHash = () => {
   try {
-    // On exécute la commande git pour obtenir l'ID du dernier commit et on nettoie le résultat.
     return execSync('git rev-parse HEAD').toString().trim();
   } catch (e) {
     console.error('Impossible de récupérer le hash du commit git:', e);
-    return 'unknown'; // Valeur de secours si git n'est pas disponible
+    return 'unknown';
   }
 };
 
@@ -114,7 +122,6 @@ app.get('/api/version', async (req, res) => {
     const packageJsonPath = path.resolve(process.cwd(), 'package.json');
     const packageJsonData = await fs.readFile(packageJsonPath, 'utf8');
     const { version } = JSON.parse(packageJsonData);
-    // --- MODIFICATION : On ajoute le hash du commit à notre réponse ---
     const commitHash = getGitCommitHash();
     res.json({ version, commitHash });
   } catch (error) {
