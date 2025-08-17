@@ -98,7 +98,6 @@ router.get('/', protect, admin, asyncHandler(async (req, res) => {
   res.json(orders);
 }));
 
-// --- NOUVELLE ROUTE AJOUTÉE ---
 // @desc    Récupérer les commandes archivées (Admin)
 // @route   GET /api/orders/archived
 // @access  Private/Admin
@@ -106,7 +105,6 @@ router.get('/archived', protect, admin, asyncHandler(async (req, res) => {
     const orders = await Order.find({ isArchived: true }).populate('user', 'id name').sort({ createdAt: -1 });
     res.json(orders);
 }));
-// --- FIN DE L'AJOUT ---
 
 // @desc    Récupérer les commandes visibles de l'utilisateur
 // @route   GET /api/orders/myorders
@@ -146,7 +144,8 @@ router.get('/:id', protect, asyncHandler(async (req, res) => {
 // @route   PUT /api/orders/:id/status
 // @access  Private/Admin
 router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
-    const order = await Order.findById(req.params.id).populate('user', 'name email');
+    // --- CORRECTION : On s'assure de toujours avoir les informations complètes de l'utilisateur ---
+    const order = await Order.findById(req.params.id).populate('user', 'name email phone');
 
     if (!order) {
         res.status(404);
@@ -175,7 +174,8 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
             order.deliveredAt = Date.now();
         }
 
-        if (customer) {
+        // --- CORRECTION : On vérifie que 'customer' n'est pas null avant de l'utiliser ---
+        if (customer && customer._id) {
             const newNotif = {
                 notificationId: uuidv4(),
                 user: customer._id,
@@ -193,7 +193,8 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
         order.paidAt = Date.now();
         hasChanged = true;
       
-        if (customer) {
+        // --- CORRECTION : On vérifie que 'customer' n'est pas null avant de l'utiliser ---
+        if (customer && customer._id) {
             const paymentNotif = {
                 notificationId: uuidv4(),
                 user: customer._id,
@@ -207,7 +208,7 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
 
     if (hasChanged) {
         const updatedOrder = await order.save();
-        if (customer) {
+        if (customer && customer._id) {
             req.io.to(customer._id.toString()).emit('order_update', { orderId: order._id });
         }
         req.io.to('admin').emit('order_update', { orderId: order._id });
