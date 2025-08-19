@@ -121,31 +121,171 @@ router.delete('/:id', protect, admin, asyncHandler(async (req, res) => {
   }
 }));
 
+// --- DÉBUT DES NOUVELLES ROUTES ET LOGIQUE POUR LES AVIS ---
+
+// Fonction récursive pour trouver un avis (parent ou enfant)
+const findReview = (reviews, reviewId) => {
+    for (const review of reviews) {
+        if (review._id.toString() === reviewId) {
+            return review;
+        }
+        if (review.replies && review.replies.length > 0) {
+            const foundInReply = findReview(review.replies, reviewId);
+            if (foundInReply) {
+                return foundInReply;
+            }
+        }
+    }
+    return null;
+};
+
+// @desc    Créer un avis ou une réponse
+// @route   POST /api/products/:id/reviews
+// @access  Private
 router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
-    const { rating, comment } = req.body;
+    const { rating, comment, parentId } = req.body;
     const product = await Product.findById(req.params.id);
-    if (product) {
-      const alreadyReviewed = product.reviews.find((r) => r.user.toString() === req.user._id.toString());
-      if (alreadyReviewed) {
-        res.status(400);
-        throw new Error('Vous avez déjà commenté ce produit');
-      }
-      const deliveredOrders = await Order.find({ user: req.user._id, status: 'Livrée', 'orderItems.product': product._id });
-      if (deliveredOrders.length === 0) {
-        res.status(403);
-        throw new Error("Vous ne pouvez laisser un avis que sur les produits que vous avez reçus.");
-      }
-      const review = { name: req.user.name, rating: Number(rating), comment, user: req.user._id };
-      product.reviews.push(review);
-      product.numReviews = product.reviews.length;
-      product.rating = product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length;
-      await product.save();
-      res.status(201).json({ message: 'Avis ajouté' });
-    } else {
+
+    if (!product) {
+        res.status(404);
+        throw new Error('Produit non trouvé');
+    }
+
+    const review = {
+        name: req.user.name,
+        rating: Number(rating) || 0, // La note n'est pas requise pour une réponse
+        comment,
+        user: req.user._id,
+    };
+
+    if (parentId) { // C'est une réponse
+        const parentReview = findReview(product.reviews, parentId);
+        if (!parentReview) {
+            res.status(404);
+            throw new Error('Avis parent non trouvé');
+        }
+        parentReview.replies.push(review);
+    } else { // C'est un nouvel avis
+        const alreadyReviewed = product.reviews.some(r => r.user.toString() === req.user._id.toString());
+        if (alreadyReviewed) {
+            res.status(400);
+            throw new Error('Vous avez déjà commenté ce produit');
+        }
+        product.reviews.push(review);
+        product.numReviews = product.reviews.length;
+        product.rating = product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length;
+    }
+  
+    await product.save();
+    res.status(201).json({ message: 'Avis ajouté' });
+}));
+
+// @desc    Liker/Unliker un avis ou une réponse
+// @route   PUT /api/products/:id/reviews/:reviewId/like
+// @access  Private
+router.put('/:id/reviews/:reviewId/like', protect, asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.id);
+    if (!product) {
       res.status(404);
       throw new Error('Produit non trouvé');
     }
-  })
-);
+  
+    const review = findReview(product.reviews, req.params.reviewId);
+    if (!review) {
+      res.status(404);
+      throw new Error('Avis non trouvé');
+    }
+  
+    const likeIndex = review.likes.findIndex(id => id.toString() === req.user._id.toString());
+  
+    if (likeIndex > -1) {
+      review.likes.splice(likeIndex, 1); // Unlike
+    } else {
+      review.likes.push(req.user._id); // Like
+    }
+  
+    await product.save();
+    res.json({ message: 'Like mis à jour' });
+}));
 
-export default router;          
+// @desc    Modifier un avis ou une réponse
+// @route   PUT /api/products/:id/reviews/:reviewId
+// @access  Private
+router.put('/:id/reviews/:reviewId', protect, asyncHandler(async (req, res) => {
+    const { comment } = req.body;
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      res.status(404);
+      throw new Error('Produit non trouvé');
+    }
+
+    const review = findReview(product.reviews, req.params.reviewId);
+
+    if (!review) {
+      res.status(404);
+      throw new Error('Avis non trouvé');
+    }
+
+    if (review.user.toString() !== req.user._id.toString()) {
+      res.status(401);
+      throw new Error('Action non autorisée');
+    }
+
+    review.comment = comment;
+    await product.save();
+    res.json({ message: 'Avis modifié' });
+}));
+
+// @desc    Supprimer un avis ou une réponse
+// @route   DELETE /api/products/:id/reviews/:reviewId
+// @access  Private
+router.delete('/:id/reviews/:reviewId', protect, asyncHandler(async (req, res) => {
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      res.status(404);
+      throw new Error('Produit non trouvé');
+    }
+
+    let reviewToDelete = null;
+    let parentArray = product.reviews;
+
+    const findAndRemove = (reviews, reviewId) => {
+        for (let i = 0; i < reviews.length; i++) {
+            if (reviews[i]._id.toString() === reviewId) {
+                reviewToDelete = reviews[i];
+                // Vérifier les permissions
+                if (reviewToDelete.user.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+                    return 'unauthorized';
+                }
+                reviews.splice(i, 1);
+                return 'found';
+            }
+            if (reviews[i].replies && reviews[i].replies.length > 0) {
+                const result = findAndRemove(reviews[i].replies, reviewId);
+                if (result) return result;
+            }
+        }
+        return null;
+    };
+
+    const result = findAndRemove(product.reviews, req.params.reviewId);
+
+    if (result === 'unauthorized') {
+        res.status(401);
+        throw new Error('Action non autorisée');
+    }
+    
+    if (result === 'found') {
+        await product.save();
+        res.json({ message: 'Avis supprimé' });
+    } else {
+        res.status(404);
+        throw new Error('Avis non trouvé');
+    }
+}));
+
+// --- FIN DES NOUVELLES ROUTES ---
+
+export default router;

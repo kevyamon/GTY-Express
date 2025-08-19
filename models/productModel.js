@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-// --- NOUVEAU : Schéma pour un avis individuel ---
+// Le schéma pour un avis a été enrichi pour gérer les réponses et les likes
 const reviewSchema = mongoose.Schema(
   {
     user: {
@@ -20,12 +20,27 @@ const reviewSchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    // --- DÉBUT DES AJOUTS ---
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    parent: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Review', // Fait référence à un autre avis dans le même document
+      default: null,
+    },
+    // On va stocker les réponses directement ici pour faciliter la récupération
+    // C'est une copie de reviewSchema, Mongoose gère bien cette récursion
+    replies: [this], 
+    // --- FIN DES AJOUTS ---
   },
   {
     timestamps: true,
   }
 );
-// --- FIN DU NOUVEAU SCHÉMA ---
 
 const productSchema = new mongoose.Schema(
   {
@@ -64,19 +79,17 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    // --- AJOUTS POUR LES AVIS ---
-    reviews: [reviewSchema], // Un produit peut avoir plusieurs avis
+    reviews: [reviewSchema], // Le schéma des avis est maintenant plus complexe
     rating: {
       type: Number,
       required: true,
-      default: 0, // Note moyenne
+      default: 0,
     },
     numReviews: {
       type: Number,
       required: true,
-      default: 0, // Nombre total d'avis
+      default: 0,
     },
-    // --- FIN DES AJOUTS ---
     price: {
       type: Number,
       required: true,
