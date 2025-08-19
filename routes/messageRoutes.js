@@ -11,9 +11,11 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
+    // --- CORRECTION : On récupère "files" au lieu de "image" ---
     let { recipientId, text, files } = req.body;
     const senderId = req.user._id;
 
+    // La validation accepte maintenant un texte OU des fichiers
     if (!text && (!files || files.length === 0)) {
         return res.status(400).json({ message: "Le message ne peut pas être vide."});
     }
@@ -41,30 +43,34 @@ router.post('/send', protect, async (req, res) => {
         if (!conversation) return res.status(404).json({ message: "Conversation introuvable."});
     }
     
+    // --- CORRECTION : On enregistre le tableau "files" ---
     const newMessage = new Message({
       conversationId: conversation._id,
       sender: senderId,
       text,
-      files,
+      files, // On utilise le tableau de fichiers ici
       seenBy: [senderId],
     });
     
+    // On met à jour le texte du dernier message de manière plus intelligente
     const lastMessageText = files && files.length > 0 
       ? `📄 ${files.length} fichier(s)` 
       : text;
 
-    await newMessage.save();
+    // --- Le reste de la logique est mis à jour en conséquence ---
+    await newMessage.save(); // Sauvegarde le message d'abord
     conversation.lastMessage = { 
       text: lastMessageText, 
       sender: senderId,
       readBy: [senderId],
     };
+    // On s'assure que l'ID du nouveau message est bien dans la conversation
     if (!conversation.messages.includes(newMessage._id)) {
         conversation.messages.push(newMessage._id);
     }
-    await conversation.save();
+    await conversation.save(); // Puis on sauvegarde la conversation
 
-    await newMessage.populate('sender', 'name profilePicture isAdmin');
+    await newMessage.populate('sender', 'name profilePicture isAdmin'); // On récupère aussi le rôle
     const recipientSocketId = conversation.participants.find(p => p.toString() !== senderId.toString());
     req.io.to(recipientSocketId.toString()).emit('newMessage', newMessage);
     res.status(201).json(newMessage);
@@ -74,18 +80,15 @@ router.post('/send', protect, async (req, res) => {
   }
 });
 
-// @desc    Récupérer les conversations ACTIVES de l'utilisateur
+// @desc    Récupérer toutes les conversations de l'utilisateur connecté
 // @route   GET /api/messages
 // @access  Private
 router.get('/', protect, async (req, res) => {
     try {
         const userId = req.user._id;
-        // --- MODIFICATION : On exclut les conversations archivées par l'utilisateur ---
-        const conversations = await Conversation.find({ 
-          participants: userId,
-          archivedBy: { $ne: userId } // '$ne' signifie "not equal"
-        })
-            .populate('participants', 'name profilePicture isAdmin')
+        // --- AMÉLIORATION : On récupère aussi le rôle (isAdmin) ---
+        const conversations = await Conversation.find({ participants: userId })
+            .populate('participants', 'name profilePicture isAdmin') // Ajout de isAdmin
             .sort({ updatedAt: -1 });
 
         const conversationsWithStatus = conversations.map(convo => {
@@ -99,78 +102,15 @@ router.get('/', protect, async (req, res) => {
     }
 });
 
-// --- DÉBUT DE L'AJOUT ---
-// @desc    Récupérer les conversations ARCHIVÉES de l'utilisateur
-// @route   GET /api/messages/archived
-// @access  Private
-router.get('/archived', protect, async (req, res) => {
-  try {
-      const userId = req.user._id;
-      // On cherche uniquement les conversations où l'ID de l'utilisateur est dans archivedBy
-      const conversations = await Conversation.find({ 
-        participants: userId,
-        archivedBy: userId 
-      })
-          .populate('participants', 'name profilePicture isAdmin')
-          .sort({ updatedAt: -1 });
-
-      // On garde la même logique pour le statut "non lu"
-      const conversationsWithStatus = conversations.map(convo => {
-        const isUnread = convo.lastMessage && !convo.lastMessage.readBy.includes(userId);
-        return { ...convo.toObject(), isUnread };
-      });
-
-      res.json(conversationsWithStatus);
-  } catch (error) {
-      res.status(500).json({ message: 'Erreur du serveur' });
-  }
-});
-
-// @desc    Archiver ou désarchiver une conversation
-// @route   POST /api/messages/archive/:conversationId
-// @access  Private
-router.post('/archive/:conversationId', protect, async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-    const userId = req.user._id;
-
-    const conversation = await Conversation.findById(conversationId);
-
-    if (!conversation) {
-      return res.status(404).json({ message: 'Conversation non trouvée.' });
-    }
-
-    const isArchived = conversation.archivedBy.includes(userId);
-
-    if (isArchived) {
-      // Si déjà archivée, on retire l'ID de l'utilisateur (désarchivage)
-      conversation.archivedBy.pull(userId);
-    } else {
-      // Sinon, on ajoute l'ID de l'utilisateur (archivage)
-      conversation.archivedBy.push(userId);
-    }
-
-    await conversation.save();
-    
-    // On notifie le client via socket pour qu'il mette à jour son interface instantanément
-    req.io.to(userId.toString()).emit('conversation_archived');
-
-    res.json({ message: `Conversation ${isArchived ? 'désarchivée' : 'archivée'} avec succès.` });
-  } catch (error) {
-    res.status(500).json({ message: 'Erreur du serveur' });
-  }
-});
-// --- FIN DE L'AJOUT ---
-
-
 // @desc    Récupérer les messages d'une conversation
 // @route   GET /api/messages/:conversationId
 // @access  Private
 router.get('/:conversationId', protect, async (req, res) => {
   try {
+    // --- AMÉLIORATION : On récupère aussi le rôle de l'expéditeur ---
     const messages = await Message.find({
       conversationId: req.params.conversationId,
-    }).populate('sender', 'name profilePicture isAdmin');
+    }).populate('sender', 'name profilePicture isAdmin'); // Ajout de isAdmin
     res.json(messages);
   } catch (error) {
     res.status(500).json({ message: 'Erreur du serveur' });
@@ -247,7 +187,7 @@ router.delete('/:messageId', protect, async (req, res) => {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
     message.text = "Ce message a été supprimé";
-    message.files = [];
+    message.files = []; // On vide aussi les fichiers
     await message.save();
     const conversation = await Conversation.findById(message.conversationId);
     conversation.participants.forEach(participant => {
