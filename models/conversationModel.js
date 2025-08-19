@@ -21,6 +21,15 @@ const conversationSchema = mongoose.Schema(
       // On ajoute un tableau pour savoir qui a lu le message
       readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     },
+    // --- DÉBUT DE LA MODIFICATION ---
+    // Un tableau qui stockera les IDs des utilisateurs qui ont archivé cette conversation
+    archivedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    // --- FIN DE LA MODIFICATION ---
   },
   {
     timestamps: true,
