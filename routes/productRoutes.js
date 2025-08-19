@@ -121,7 +121,7 @@ router.delete('/:id', protect, admin, asyncHandler(async (req, res) => {
   }
 }));
 
-// --- DÉBUT DES NOUVELLES ROUTES ET LOGIQUE POUR LES AVIS ---
+// --- DÉBUT DES MODIFICATIONS POUR LE TEMPS RÉEL ---
 
 // Fonction récursive pour trouver un avis (parent ou enfant)
 const findReview = (reviews, reviewId) => {
@@ -177,6 +177,8 @@ router.post('/:id/reviews', protect, asyncHandler(async (req, res) => {
     }
   
     await product.save();
+    // On envoie le signal de mise à jour
+    req.io.emit('product_update', { productId: product._id });
     res.status(201).json({ message: 'Avis ajouté' });
 }));
 
@@ -205,6 +207,8 @@ router.put('/:id/reviews/:reviewId/like', protect, asyncHandler(async (req, res)
     }
   
     await product.save();
+    // On envoie le signal de mise à jour
+    req.io.emit('product_update', { productId: product._id });
     res.json({ message: 'Like mis à jour' });
 }));
 
@@ -234,6 +238,8 @@ router.put('/:id/reviews/:reviewId', protect, asyncHandler(async (req, res) => {
 
     review.comment = comment;
     await product.save();
+    // On envoie le signal de mise à jour
+    req.io.emit('product_update', { productId: product._id });
     res.json({ message: 'Avis modifié' });
 }));
 
@@ -279,6 +285,8 @@ router.delete('/:id/reviews/:reviewId', protect, asyncHandler(async (req, res) =
     
     if (result === 'found') {
         await product.save();
+        // On envoie le signal de mise à jour
+        req.io.emit('product_update', { productId: product._id });
         res.json({ message: 'Avis supprimé' });
     } else {
         res.status(404);
@@ -286,6 +294,6 @@ router.delete('/:id/reviews/:reviewId', protect, asyncHandler(async (req, res) =
     }
 }));
 
-// --- FIN DES NOUVELLES ROUTES ---
+// --- FIN DES MODIFICATIONS ---
 
 export default router;
