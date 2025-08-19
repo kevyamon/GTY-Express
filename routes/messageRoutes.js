@@ -11,11 +11,9 @@ const router = express.Router();
 // @access  Private
 router.post('/send', protect, async (req, res) => {
   try {
-    // --- CORRECTION : On récupère "files" au lieu de "image" ---
     let { recipientId, text, files } = req.body;
     const senderId = req.user._id;
 
-    // La validation accepte maintenant un texte OU des fichiers
     if (!text && (!files || files.length === 0)) {
         return res.status(400).json({ message: "Le message ne peut pas être vide."});
     }
@@ -43,36 +41,43 @@ router.post('/send', protect, async (req, res) => {
         if (!conversation) return res.status(404).json({ message: "Conversation introuvable."});
     }
     
-    // --- CORRECTION : On enregistre le tableau "files" ---
+    // --- AMÉLIORATION : Si un admin envoie un message, on désarchive la conv pour lui ---
+    if (req.user.isAdmin) {
+      conversation.archivedBy.pull(req.user._id);
+    }
+    // --- FIN DE L'AMÉLIORATION ---
+    
     const newMessage = new Message({
       conversationId: conversation._id,
       sender: senderId,
       text,
-      files, // On utilise le tableau de fichiers ici
+      files,
       seenBy: [senderId],
     });
     
-    // On met à jour le texte du dernier message de manière plus intelligente
     const lastMessageText = files && files.length > 0 
       ? `📄 ${files.length} fichier(s)` 
       : text;
 
-    // --- Le reste de la logique est mis à jour en conséquence ---
-    await newMessage.save(); // Sauvegarde le message d'abord
+    await newMessage.save();
     conversation.lastMessage = { 
       text: lastMessageText, 
       sender: senderId,
       readBy: [senderId],
     };
-    // On s'assure que l'ID du nouveau message est bien dans la conversation
     if (!conversation.messages.includes(newMessage._id)) {
         conversation.messages.push(newMessage._id);
     }
-    await conversation.save(); // Puis on sauvegarde la conversation
+    await conversation.save();
 
-    await newMessage.populate('sender', 'name profilePicture isAdmin'); // On récupère aussi le rôle
+    await newMessage.populate('sender', 'name profilePicture isAdmin');
     const recipientSocketId = conversation.participants.find(p => p.toString() !== senderId.toString());
     req.io.to(recipientSocketId.toString()).emit('newMessage', newMessage);
+    
+    // --- AMÉLIORATION : On notifie aussi les admins pour la mise à jour de l'UI ---
+    req.io.to('admin').emit('conversation_update');
+    // --- FIN DE L'AMÉLIORATION ---
+
     res.status(201).json(newMessage);
   } catch (error) {
     console.error(error);
@@ -86,9 +91,18 @@ router.post('/send', protect, async (req, res) => {
 router.get('/', protect, async (req, res) => {
     try {
         const userId = req.user._id;
-        // --- AMÉLIORATION : On récupère aussi le rôle (isAdmin) ---
-        const conversations = await Conversation.find({ participants: userId })
-            .populate('participants', 'name profilePicture isAdmin') // Ajout de isAdmin
+
+        // --- AMÉLIORATION POUR L'ARCHIVAGE ---
+        const query = { participants: userId };
+        // Si l'utilisateur est un admin, on ne lui montre que les conversations
+        // qu'il n'a PAS mises dans sa propre liste d'archives.
+        if (req.user.isAdmin) {
+            query.archivedBy = { $ne: userId };
+        }
+        // --- FIN DE L'AMÉLIORATION ---
+
+        const conversations = await Conversation.find(query)
+            .populate('participants', 'name profilePicture isAdmin')
             .sort({ updatedAt: -1 });
 
         const conversationsWithStatus = conversations.map(convo => {
@@ -102,15 +116,49 @@ router.get('/', protect, async (req, res) => {
     }
 });
 
+// --- NOUVELLE ROUTE POUR L'ARCHIVAGE (ADMIN SEULEMENT) ---
+// @desc    Archiver ou désarchiver une conversation
+// @route   PUT /api/messages/:conversationId/archive
+// @access  Private/Admin
+router.put('/:conversationId/archive', protect, admin, async (req, res) => {
+    try {
+      const conversation = await Conversation.findById(req.params.conversationId);
+      if (!conversation) {
+        return res.status(404).json({ message: 'Conversation non trouvée.' });
+      }
+  
+      const adminId = req.user._id;
+      const isArchived = conversation.archivedBy.includes(adminId);
+  
+      if (isArchived) {
+        // Si elle est déjà archivée par cet admin, on la désarchive
+        conversation.archivedBy.pull(adminId);
+      } else {
+        // Sinon, on l'archive
+        conversation.archivedBy.push(adminId);
+      }
+  
+      await conversation.save();
+  
+      // On notifie tous les admins pour que leur interface se mette à jour
+      req.io.to('admin').emit('conversation_update');
+  
+      res.json({ message: `Conversation ${isArchived ? 'désarchivée' : 'archivée'}.` });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+// --- FIN DE LA NOUVELLE ROUTE ---
+
 // @desc    Récupérer les messages d'une conversation
 // @route   GET /api/messages/:conversationId
 // @access  Private
 router.get('/:conversationId', protect, async (req, res) => {
   try {
-    // --- AMÉLIORATION : On récupère aussi le rôle de l'expéditeur ---
     const messages = await Message.find({
       conversationId: req.params.conversationId,
-    }).populate('sender', 'name profilePicture isAdmin'); // Ajout de isAdmin
+    }).populate('sender', 'name profilePicture isAdmin');
     res.json(messages);
   } catch (error) {
     res.status(500).json({ message: 'Erreur du serveur' });
@@ -129,6 +177,9 @@ router.post('/read/:conversationId', protect, async (req, res) => {
         conversation.lastMessage.readBy.push(userId);
         await conversation.save();
         req.io.to(userId.toString()).emit('conversationRead', { conversationId: conversation._id });
+        // --- AMÉLIORATION ---
+        req.io.to('admin').emit('conversation_update');
+        // --- FIN AMÉLIORATION ---
       }
     }
     res.status(200).json({ message: 'Conversation marquée comme lue.' });
@@ -149,6 +200,7 @@ router.post('/read-all', protect, async (req, res) => {
       );
 
       req.io.to(userId.toString()).emit('allConversationsRead');
+      req.io.to('admin').emit('conversation_update'); // On notifie aussi les admins
       res.status(200).json({ message: 'Toutes les conversations ont été marquées comme lues.' });
     } catch (error) {
       res.status(500).json({ message: 'Erreur du serveur' });
@@ -187,7 +239,7 @@ router.delete('/:messageId', protect, async (req, res) => {
       return res.status(401).json({ message: 'Action non autorisée' });
     }
     message.text = "Ce message a été supprimé";
-    message.files = []; // On vide aussi les fichiers
+    message.files = [];
     await message.save();
     const conversation = await Conversation.findById(message.conversationId);
     conversation.participants.forEach(participant => {
