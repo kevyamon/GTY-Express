@@ -41,11 +41,9 @@ router.post('/send', protect, async (req, res) => {
         if (!conversation) return res.status(404).json({ message: "Conversation introuvable."});
     }
     
-    // --- AMÉLIORATION : Si un admin envoie un message, on désarchive la conv pour lui ---
     if (req.user.isAdmin) {
       conversation.archivedBy.pull(req.user._id);
     }
-    // --- FIN DE L'AMÉLIORATION ---
     
     const newMessage = new Message({
       conversationId: conversation._id,
@@ -74,9 +72,7 @@ router.post('/send', protect, async (req, res) => {
     const recipientSocketId = conversation.participants.find(p => p.toString() !== senderId.toString());
     req.io.to(recipientSocketId.toString()).emit('newMessage', newMessage);
     
-    // --- AMÉLIORATION : On notifie aussi les admins pour la mise à jour de l'UI ---
     req.io.to('admin').emit('conversation_update');
-    // --- FIN DE L'AMÉLIORATION ---
 
     res.status(201).json(newMessage);
   } catch (error) {
@@ -91,15 +87,10 @@ router.post('/send', protect, async (req, res) => {
 router.get('/', protect, async (req, res) => {
     try {
         const userId = req.user._id;
-
-        // --- AMÉLIORATION POUR L'ARCHIVAGE ---
         const query = { participants: userId };
-        // Si l'utilisateur est un admin, on ne lui montre que les conversations
-        // qu'il n'a PAS mises dans sa propre liste d'archives.
         if (req.user.isAdmin) {
             query.archivedBy = { $ne: userId };
         }
-        // --- FIN DE L'AMÉLIORATION ---
 
         const conversations = await Conversation.find(query)
             .populate('participants', 'name profilePicture isAdmin')
@@ -116,7 +107,32 @@ router.get('/', protect, async (req, res) => {
     }
 });
 
-// --- NOUVELLE ROUTE POUR L'ARCHIVAGE (ADMIN SEULEMENT) ---
+// --- DÉBUT DE LA CORRECTION : ROUTE MANQUANTE AJOUTÉE ---
+// @desc    Récupérer les conversations archivées de l'admin
+// @route   GET /api/messages/archived
+// @access  Private/Admin
+router.get('/archived', protect, admin, async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // On cherche les conversations où l'ID de l'admin est présent dans le tableau "archivedBy"
+        const conversations = await Conversation.find({ participants: userId, archivedBy: userId })
+            .populate('participants', 'name profilePicture isAdmin')
+            .sort({ updatedAt: -1 });
+            
+        // La logique pour le statut "non lu" reste la même
+        const conversationsWithStatus = conversations.map(convo => {
+            const isUnread = convo.lastMessage && !convo.lastMessage.readBy.includes(userId);
+            return { ...convo.toObject(), isUnread };
+        });
+
+        res.json(conversationsWithStatus);
+    } catch (error) {
+        res.status(500).json({ message: 'Erreur du serveur' });
+    }
+});
+// --- FIN DE LA CORRECTION ---
+
 // @desc    Archiver ou désarchiver une conversation
 // @route   PUT /api/messages/:conversationId/archive
 // @access  Private/Admin
@@ -131,16 +147,12 @@ router.put('/:conversationId/archive', protect, admin, async (req, res) => {
       const isArchived = conversation.archivedBy.includes(adminId);
   
       if (isArchived) {
-        // Si elle est déjà archivée par cet admin, on la désarchive
         conversation.archivedBy.pull(adminId);
       } else {
-        // Sinon, on l'archive
         conversation.archivedBy.push(adminId);
       }
   
       await conversation.save();
-  
-      // On notifie tous les admins pour que leur interface se mette à jour
       req.io.to('admin').emit('conversation_update');
   
       res.json({ message: `Conversation ${isArchived ? 'désarchivée' : 'archivée'}.` });
@@ -149,7 +161,6 @@ router.put('/:conversationId/archive', protect, admin, async (req, res) => {
       res.status(500).json({ message: 'Erreur du serveur' });
     }
 });
-// --- FIN DE LA NOUVELLE ROUTE ---
 
 // @desc    Récupérer les messages d'une conversation
 // @route   GET /api/messages/:conversationId
@@ -177,9 +188,7 @@ router.post('/read/:conversationId', protect, async (req, res) => {
         conversation.lastMessage.readBy.push(userId);
         await conversation.save();
         req.io.to(userId.toString()).emit('conversationRead', { conversationId: conversation._id });
-        // --- AMÉLIORATION ---
         req.io.to('admin').emit('conversation_update');
-        // --- FIN AMÉLIORATION ---
       }
     }
     res.status(200).json({ message: 'Conversation marquée comme lue.' });
@@ -200,7 +209,7 @@ router.post('/read-all', protect, async (req, res) => {
       );
 
       req.io.to(userId.toString()).emit('allConversationsRead');
-      req.io.to('admin').emit('conversation_update'); // On notifie aussi les admins
+      req.io.to('admin').emit('conversation_update');
       res.status(200).json({ message: 'Toutes les conversations ont été marquées comme lues.' });
     } catch (error) {
       res.status(500).json({ message: 'Erreur du serveur' });
