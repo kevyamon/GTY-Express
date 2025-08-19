@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 
-// Le schéma pour un avis a été enrichi pour gérer les réponses et les likes
-const reviewSchema = mongoose.Schema(
+// --- CORRECTION APPLIQUÉE ICI ---
+// On définit d'abord le schéma sans le champ récursif
+const reviewSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -15,12 +16,12 @@ const reviewSchema = mongoose.Schema(
     rating: {
       type: Number,
       required: true,
+      default: 0,
     },
     comment: {
       type: String,
       required: true,
     },
-    // --- DÉBUT DES AJOUTS ---
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -29,18 +30,20 @@ const reviewSchema = mongoose.Schema(
     ],
     parent: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Review', // Fait référence à un autre avis dans le même document
+      ref: 'Review',
       default: null,
     },
-    // On va stocker les réponses directement ici pour faciliter la récupération
-    // C'est une copie de reviewSchema, Mongoose gère bien cette récursion
-    replies: [this], 
-    // --- FIN DES AJOUTS ---
+    // Le champ 'replies' est retiré d'ici pour être ajouté après
   },
   {
     timestamps: true,
   }
 );
+
+// Puis, on ajoute le champ récursif 'replies' au schéma déjà existant.
+// C'est la méthode correcte pour que Mongoose comprenne la référence à soi-même.
+reviewSchema.add({ replies: [reviewSchema] });
+// --- FIN DE LA CORRECTION ---
 
 const productSchema = new mongoose.Schema(
   {
@@ -79,7 +82,7 @@ const productSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    reviews: [reviewSchema], // Le schéma des avis est maintenant plus complexe
+    reviews: [reviewSchema],
     rating: {
       type: Number,
       required: true,
