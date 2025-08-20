@@ -9,7 +9,8 @@ const router = express.Router();
 // @route   GET /api/push/vapid-public-key
 // @access  Public
 router.get('/vapid-public-key', (req, res) => {
-  res.send(process.env.VAPID_PUBLIC_KEY);
+  // --- CORRECTION : Envoyer la clé dans un objet JSON ---
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
 // @desc    Abonner un utilisateur aux notifications push
