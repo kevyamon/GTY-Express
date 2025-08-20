@@ -25,7 +25,7 @@ router.post('/subscribe', protect, asyncHandler(async (req, res) => {
         throw new Error('Utilisateur non trouvé');
     }
 
-    // Vérifier si l'abonnement existe déjà pour éviter les doublons
+    // Vérifier si l'abonnement existe déjà pour éviter les  doublons
     const exists = user.pushSubscriptions.some(sub => sub.endpoint === subscription.endpoint);
 
     if (!exists) {
