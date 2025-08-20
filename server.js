@@ -27,6 +27,7 @@ import complaintRoutes from './routes/complaintRoutes.js';
 import warningRoutes from './routes/warningRoutes.js';
 import suggestionRoutes from './routes/suggestionRoutes.js';
 import globalMessageRoutes from './routes/globalMessageRoutes.js';
+import pushRoutes from './routes/pushRoutes.js'; // --- NOUVEL IMPORT ---
 
 const serverStartTime = new Date();
 const port = process.env.PORT || 5000;
@@ -37,18 +38,15 @@ const app = express();
 
 app.set('trust proxy', 1);
 
-// --- MODIFICATION : On autorise maintenant le localhost en plus du site de production ---
 const corsOptions = {
   origin: [
     process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
-    'http://localhost:5173', // Port par défaut de Vite
-    'http://localhost:3000'  // Autre port courant pour le développement
+    'http://localhost:5173',
+    'http://localhost:3000'
   ],
   credentials: true,
 };
 app.use(cors(corsOptions));
-// --- FIN DE LA MODIFICATION ---
-
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -61,7 +59,7 @@ app.use('/api', limiter);
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [ // On met à jour ici aussi pour Socket.IO
+    origin: [
       process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com',
       'http://localhost:5173',
       'http://localhost:3000'
@@ -92,7 +90,7 @@ app.use('/api/complaints', complaintRoutes);
 app.use('/api/warnings', warningRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/global-messages', globalMessageRoutes);
-
+app.use('/api/push', pushRoutes); // --- NOUVELLE LIGNE ---
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);

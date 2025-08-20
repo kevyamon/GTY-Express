@@ -2,6 +2,7 @@ import express from 'express';
 import asyncHandler from '../middleware/asyncHandler.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import Warning from '../models/warningModel.js';
+import { sendPushNotification } from '../utils/pushService.js'; // --- NOUVEL IMPORT ---
 
 const router = express.Router();
 
@@ -28,6 +29,14 @@ router.post('/', protect, admin, asyncHandler(async (req, res) => {
   // Envoyer une notification en temps réel à l'utilisateur ciblé
   req.io.to(userId).emit('new_warning', createdWarning);
 
+  // --- AJOUT : Envoyer une notification push ---
+  sendPushNotification(userId, {
+    title: '⚠️ Avertissement de GTY Express',
+    body: message,
+    data: { url: '/profile' } // URL à ouvrir au clic
+  });
+  // --- FIN DE L'AJOUT ---
+
   res.status(201).json(createdWarning);
 }));
 
@@ -46,14 +55,11 @@ router.delete('/:id', protect, asyncHandler(async (req, res) => {
   const warning = await Warning.findById(req.params.id);
 
   if (warning) {
-    // Vérifier que c'est bien l'utilisateur concerné qui supprime son propre avertissement
     if (warning.user.toString() !== req.user._id.toString()) {
       res.status(401);
       throw new Error('Action non autorisée');
     }
     
-    // On pourrait le supprimer avec .deleteOne()
-    // mais le marquer comme 'dismissed' est mieux si on veut garder un historique
     await warning.deleteOne(); 
 
     res.json({ message: 'Avertissement fermé' });

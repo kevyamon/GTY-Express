@@ -1,6 +1,16 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// --- AJOUT : Schéma pour l'abonnement push ---
+const pushSubscriptionSchema = new mongoose.Schema({
+  endpoint: { type: String, required: true, unique: true },
+  keys: {
+    p256dh: { type: String, required: true },
+    auth: { type: String, required: true },
+  },
+});
+// --- FIN DE L'AJOUT ---
+
 const userSchema = mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -9,13 +19,14 @@ const userSchema = mongoose.Schema(
     phone: { type: String, required: true, unique: true },
     profilePicture: { type: String, default: '' },
     isAdmin: { type: Boolean, required: true, default: false },
-    // CHAMP AJOUTÉ POUR GÉRER LE STATUT DU COMPTE
     status: {
       type: String,
       required: true,
       enum: ['active', 'banned'],
       default: 'active',
     },
+    // --- AJOUT : Champ pour stocker les abonnements ---
+    pushSubscriptions: [pushSubscriptionSchema],
   },
   {
     timestamps: true,
