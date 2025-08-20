@@ -2,6 +2,13 @@ import mongoose from 'mongoose';
 
 const orderSchema = mongoose.Schema(
   {
+    // --- AJOUT DU NOUVEAU NUMÉRO DE COMMANDE ---
+    orderNumber: { 
+      type: String, 
+      required: true, 
+      unique: true 
+    },
+    // --- FIN DE L'AJOUT ---
     user: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User' },
     orderItems: [
       {
@@ -54,13 +61,11 @@ const orderSchema = mongoose.Schema(
       default: true,
     },
     
-    // --- AJOUT POUR L'ARCHIVAGE ADMIN ---
     isArchived: {
       type: Boolean,
       required: true,
       default: false,
     },
-    // --- FIN DE L'AJOUT ---
   },
   {
     timestamps: true,

@@ -10,6 +10,23 @@ import { v4 as uuidv4 } from 'uuid';
 import { sendOrderConfirmationEmail, sendStatusUpdateEmail } from '../utils/emailService.js';
 import asyncHandler from '../middleware/asyncHandler.js';
 
+// --- DÉBUT : FONCTION UTILITAIRE POUR LE NUMÉRO DE COMMANDE ---
+// Génère une partie aléatoire (ex: 123AB) et s'assure qu'elle est unique
+const generateUniquePart = async () => {
+  let randomPart;
+  let orderExists = true;
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  do {
+    const digits = Math.floor(100 + Math.random() * 900); // 3 chiffres aléatoires
+    const letters = chars[Math.floor(Math.random() * chars.length)] + chars[Math.floor(Math.random() * chars.length)];
+    randomPart = `${digits}${letters}`;
+    // On vérifie si une commande existante se termine par cette partie aléatoire
+    orderExists = await Order.findOne({ orderNumber: { $regex: `-${randomPart}$` } });
+  } while (orderExists);
+  return randomPart;
+};
+// --- FIN : FONCTION UTILITAIRE ---
+
 // @desc    Valider un code coupon
 // @route   POST /api/orders/validate-coupon
 // @access  Private
@@ -48,7 +65,25 @@ router.post('/', protect, asyncHandler(async (req, res) => {
     throw new Error('Aucun article dans la commande');
   }
 
+  // --- DÉBUT DE LA GÉNÉRATION DU NOUVEL ID DE COMMANDE ---
+  const date = new Date();
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const datePart = `${day}${month}${year}`;
+
+  const productInitials = orderItems
+    .slice(0, 2)
+    .map(item => item.name.charAt(0))
+    .join('')
+    .toUpperCase();
+
+  const uniquePart = await generateUniquePart();
+  const generatedOrderNumber = `${datePart}-${productInitials}-${uniquePart}`;
+  // --- FIN DE LA GÉNÉRATION ---
+
   const orderData = {
+    orderNumber: generatedOrderNumber, // On ajoute le nouveau numéro ici
     orderItems: orderItems.map((x) => ({
       ...x,
       product: x._id,
@@ -81,7 +116,8 @@ router.post('/', protect, asyncHandler(async (req, res) => {
   const adminNotification = {
     notificationId: uuidv4(),
     user: 'admin',
-    message: `Nouvelle commande N°${createdOrder._id.toString().substring(0,8)} passée par ${req.user.name}`,
+    // --- MODIFICATION : Utilisation du nouveau numéro de commande ---
+    message: `Nouvelle commande N°${createdOrder.orderNumber} passée par ${req.user.name}`,
     link: `/admin/orderlist`,
   };
   await Notification.create(adminNotification);
@@ -177,12 +213,12 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
             const newNotif = {
                 notificationId: uuidv4(),
                 user: customer._id,
-                message: `Le statut de votre commande N°${order._id.toString().substring(0,8)} est passé à "${order.status}"`,
+                // --- MODIFICATION : Utilisation du nouveau numéro de commande ---
+                message: `Le statut de votre commande N°${order.orderNumber} est passé à "${order.status}"`,
                 link: `/order/${order._id}`,
             };
             await Notification.create(newNotif);
             req.io.to(customer._id.toString()).emit('notification', newNotif);
-            // --- CORRECTION : La ligne suivante a été déplacée ici ---
             sendStatusUpdateEmail(order, customer);
         }
     }
@@ -196,7 +232,8 @@ router.put('/:id/status', protect, admin, asyncHandler(async (req, res) => {
             const paymentNotif = {
                 notificationId: uuidv4(),
                 user: customer._id,
-                message: `Votre paiement pour la commande N°${order._id.toString().substring(0,8)} a été confirmé.`,
+                // --- MODIFICATION : Utilisation du nouveau numéro de commande ---
+                message: `Votre paiement pour la commande N°${order.orderNumber} a été confirmé.`,
                 link: `/order/${order._id}`,
             };
             await Notification.create(paymentNotif);
@@ -270,7 +307,8 @@ router.put('/:id/cancel', protect, asyncHandler(async (req, res) => {
             const newNotif = {
                 notificationId: uuidv4(),
                 user: 'admin',
-                message: `Le client ${req.user.name} a annulé la commande N°${order._id.toString().substring(0,8)}`,
+                // --- MODIFICATION : Utilisation du nouveau numéro de commande ---
+                message: `Le client ${req.user.name} a annulé la commande N°${order.orderNumber}`,
                 link: `/admin/orderlist`,
             };
             await Notification.create(newNotif);
