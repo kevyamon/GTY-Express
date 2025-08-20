@@ -24,7 +24,6 @@ router.post('/', protect, asyncHandler(async (req, res) => {
 
   const createdSuggestion = await suggestion.save();
 
-  // Notifier tous les admins
   const newNotif = {
       notificationId: uuidv4(),
       user: 'admin',
@@ -59,7 +58,6 @@ router.put('/:id', protect, asyncHandler(async (req, res) => {
     }
     suggestion.text = req.body.text || suggestion.text;
     const updatedSuggestion = await suggestion.save();
-    // On notifie les admins que le contenu a changé
     req.io.to('admin').emit('suggestion_update');
     res.json(updatedSuggestion);
   } else {
@@ -90,11 +88,24 @@ router.delete('/:id', protect, asyncHandler(async (req, res) => {
 
 // --- ROUTES POUR LES ADMINS ---
 
-// @desc    Récupérer toutes les suggestions (Admin)
+// @desc    Récupérer les suggestions actives (non archivées par l'admin)
 // @route   GET /api/suggestions
 // @access  Private/Admin
 router.get('/', protect, admin, asyncHandler(async (req, res) => {
-  const suggestions = await Suggestion.find({}).populate('user', 'name email').sort({ createdAt: -1 });
+  const suggestions = await Suggestion.find({ archivedBy: { $ne: req.user._id } })
+    .populate('user', 'name email profilePicture')
+    .sort({ createdAt: -1 });
+  res.json(suggestions);
+}));
+
+// --- NOUVELLE ROUTE ---
+// @desc    Récupérer les suggestions archivées par l'admin
+// @route   GET /api/suggestions/archived
+// @access  Private/Admin
+router.get('/archived', protect, admin, asyncHandler(async (req, res) => {
+  const suggestions = await Suggestion.find({ archivedBy: req.user._id })
+    .populate('user', 'name email profilePicture')
+    .sort({ createdAt: -1 });
   res.json(suggestions);
 }));
 
@@ -113,14 +124,10 @@ router.put('/:id/archive', protect, admin, asyncHandler(async (req, res) => {
     } else {
       suggestion.archivedBy.push(adminId);
     }
-    await suggestion.save();
+    const updatedSuggestion = await suggestion.save();
     
-    // --- LA LIGNE MAGIQUE AJOUTÉE ICI ---
-    // On prévient tous les admins qu'un changement a eu lieu
     req.io.to('admin').emit('suggestion_update');
-    // --- FIN DE L'AJOUT ---
-
-    res.json(suggestion);
+    res.json(updatedSuggestion);
   } else {
     res.status(404);
     throw new Error('Suggestion non trouvée');
