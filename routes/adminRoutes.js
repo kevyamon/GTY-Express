@@ -86,14 +86,22 @@ router.put('/users/:id/status', protect, admin, asyncHandler(async (req, res) =>
         throw new Error('Impossible de changer le statut de cet utilisateur. Attention ! Vous risquez d\'être Banni !');
     }
 
-    userToModify.status = status;
-    await userToModify.save();
-    const newToken = generateTokenWithStatus(userToModify._id, userToModify.status);
-    req.io.to(userToModify._id.toString()).emit('status_update', {
-        status: userToModify.status,
+    // --- DÉBUT DE LA CORRECTION ---
+    // On utilise findByIdAndUpdate pour ne modifier que le statut,
+    // ce qui évite la re-validation des autres champs comme 'phone'.
+    const updatedUser = await User.findByIdAndUpdate(
+        req.params.id,
+        { status: status },
+        { new: true } // 'new: true' nous retourne le document mis à jour
+    );
+    // --- FIN DE LA CORRECTION ---
+
+    const newToken = generateTokenWithStatus(updatedUser._id, updatedUser.status);
+    req.io.to(updatedUser._id.toString()).emit('status_update', {
+        status: updatedUser.status,
         token: newToken,
     });
-    res.json({ message: 'Statut mis à jour', user: userToModify });
+    res.json({ message: 'Statut mis à jour', user: updatedUser });
 }));
 
 // @desc    Changer le rôle d'un utilisateur (admin/client)
@@ -127,8 +135,13 @@ router.put('/users/:id/role', protect, admin, asyncHandler(async (req, res) => {
         throw new Error('Impossible de changer le rôle de cet utilisateur. Attention ! Vous risquez d\'être Banni !');
     }
 
-    userToModify.isAdmin = isAdmin;
-    const updatedUser = await userToModify.save();
+    // --- DÉBUT DE LA CORRECTION (même logique que pour le statut) ---
+    const updatedUser = await User.findByIdAndUpdate(
+        req.params.id,
+        { isAdmin: isAdmin },
+        { new: true }
+    );
+    // --- FIN DE LA CORRECTION ---
 
     const message = isAdmin 
         ? `Félicitations ! Vous avez été promu au rang d'Administrateur.`
