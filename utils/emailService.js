@@ -69,3 +69,27 @@ export const sendStatusUpdateEmail = (order, user) => {
   `;
   sendEmail(user.email, user.name, subject, htmlContent);
 };
+
+// --- DÉBUT DE L'AJOUT : MODÈLE D'EMAIL POUR LA RÉINITIALISATION DU MOT DE PASSE ---
+export const sendPasswordResetEmail = (user, resetToken) => {
+  const subject = '🔑 Réinitialisation de votre mot de passe GTY Express';
+  const resetUrl = `${process.env.FRONTEND_URL || 'https://gty-express-frontend.onrender.com'}/reset-password/${resetToken}`;
+
+  const htmlContent = `
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #333;">
+        <h1>Bonjour ${user.name},</h1>
+        <p>Vous avez demandé la réinitialisation de votre mot de passe. Veuillez cliquer sur le bouton ci-dessous pour continuer.</p>
+        <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; font-size: 16px; color: #ffffff; background-color: #0d6efd; text-decoration: none; border-radius: 5px; margin-top: 10px;">
+          Réinitialiser mon mot de passe
+        </a>
+        <p style="margin-top: 20px;">Ce lien expirera dans 15 minutes.</p>
+        <p>Si vous n'êtes pas à l'origine de cette demande, veuillez ignorer cet email.</p>
+        <p style="margin-top: 30px;">À très bientôt, <br>L'équipe GTY Express 🚀</p>
+      </body>
+    </html>
+  `;
+
+  sendEmail(user.email, user.name, subject, htmlContent);
+};
+// --- FIN DE L'AJOUT ---

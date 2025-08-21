@@ -27,6 +27,11 @@ const userSchema = mongoose.Schema(
     },
     // --- AJOUT : Champ pour stocker les abonnements ---
     pushSubscriptions: [pushSubscriptionSchema],
+
+    // --- DÉBUT DE LA MODIFICATION : MOT DE PASSE OUBLIÉ ---
+    resetPasswordToken: String,
+    resetPasswordExpire: Date,
+    // --- FIN DE LA MODIFICATION ---
   },
   {
     timestamps: true,
