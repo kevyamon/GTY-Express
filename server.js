@@ -17,7 +17,7 @@ import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import productRoutes from './routes/productRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
-import configRoutes from './routes/configRoutes.js';
+// import configRoutes from './routes/configRoutes.js'; // --- LIGNE SUPPRIMÉE ---
 import notificationRoutes from './routes/notificationRoutes.js';
 import promotionRoutes from './routes/promotionRoutes.js';
 import promoBannerRoutes from './routes/promoBannerRoutes.js';
@@ -27,7 +27,7 @@ import complaintRoutes from './routes/complaintRoutes.js';
 import warningRoutes from './routes/warningRoutes.js';
 import suggestionRoutes from './routes/suggestionRoutes.js';
 import globalMessageRoutes from './routes/globalMessageRoutes.js';
-import pushRoutes from './routes/pushRoutes.js'; // --- NOUVEL IMPORT ---
+import pushRoutes from './routes/pushRoutes.js';
 
 const serverStartTime = new Date();
 const port = process.env.PORT || 5000;
@@ -73,6 +73,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Important: express.urlencoded() est nécessaire pour que le webhook de CinetPay fonctionne
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -80,7 +81,7 @@ app.use(cookieParser());
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
-app.use('/api/config', configRoutes);
+// app.use('/api/config', configRoutes); // --- LIGNE SUPPRIMÉE ---
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/promotions', promotionRoutes);
 app.use('/api/promobanner', promoBannerRoutes);
@@ -90,7 +91,7 @@ app.use('/api/complaints', complaintRoutes);
 app.use('/api/warnings', warningRoutes);
 app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/global-messages', globalMessageRoutes);
-app.use('/api/push', pushRoutes); // --- NOUVELLE LIGNE ---
+app.use('/api/push', pushRoutes);
 
 io.on('connection', (socket) => {
   console.log('Un client est connecté:', socket.id);

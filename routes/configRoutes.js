@@ -1,11 +1,7 @@
 import express from 'express';
 const router = express.Router();
 
-// @desc    Get PayPal client ID
-// @route   GET /api/config/paypal
-// @access  Public
-router.get('/paypal', (req, res) => {
-  res.send({ clientId: process.env.PAYPAL_CLIENT_ID });
-});
+// Ce fichier est conservé pour éviter des erreurs d'import,
+// mais il ne contient plus de routes actives après le retrait de PayPal.
 
 export default router;
