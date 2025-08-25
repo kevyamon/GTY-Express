@@ -136,6 +136,9 @@ router.post('/:id/pay-cinetpay', protect, asyncHandler(async (req, res) => {
     throw new Error('Commande non trouvée');
   }
 
+  // On réinitialise l'état d'échec avant une nouvelle tentative
+  order.paymentAttemptFailed = false;
+
   const transaction_id = order._id.toString();
 
   const paymentData = {
@@ -147,7 +150,6 @@ router.post('/:id/pay-cinetpay', protect, asyncHandler(async (req, res) => {
     description: `Paiement pour la commande ${order.orderNumber}`,
     return_url: `${process.env.FRONTEND_URL}/order/${order._id}`,
     notify_url: `${process.env.BACKEND_URL}/api/orders/cinetpay-notify`,
-    // Vous pouvez ajouter des metadata si besoin
     metadata: `user_id:${order.user.toString()}`
   };
 
@@ -188,7 +190,6 @@ router.post('/cinetpay-notify', asyncHandler(async (req, res) => {
     }
 
     try {
-        // Étape 1: Vérifier le statut de la transaction auprès de CinetPay
         const checkStatusData = {
             apikey: process.env.CINETPAY_API_KEY,
             site_id: process.env.CINETPAY_SITE_ID,
@@ -212,11 +213,13 @@ router.post('/cinetpay-notify', asyncHandler(async (req, res) => {
                 return res.status(404).send('Commande non trouvée');
             }
 
-            // Étape 2: VÉRIFICATION RIGOUREUSE DU MONTANT
+            // --- DÉBUT DE LA MODIFICATION ---
             if (Math.round(order.totalPrice) !== cinetpayData.amount) {
                 console.warn(`ALERTE SÉCURITÉ : Montant invalide pour la commande ${order._id}. Attendu: ${Math.round(order.totalPrice)}, Reçu: ${cinetpayData.amount}`);
                 
-                // On notifie l'admin d'une tentative de paiement frauduleuse
+                order.paymentAttemptFailed = true;
+                await order.save();
+
                 const adminNotification = {
                     notificationId: uuidv4(),
                     user: 'admin',
@@ -226,11 +229,21 @@ router.post('/cinetpay-notify', asyncHandler(async (req, res) => {
                 await Notification.create(adminNotification);
                 req.io.to('admin').emit('notification', adminNotification);
 
-                // On ne valide pas la commande et on arrête le processus ici.
+                // On notifie également l'utilisateur en temps réel
+                const userNotification = {
+                    notificationId: uuidv4(),
+                    user: order.user._id,
+                    message: `Le paiement pour la commande N°${order.orderNumber} a échoué (montant incorrect). Veuillez réessayer.`,
+                    link: `/order/${order._id}`,
+                };
+                await Notification.create(userNotification);
+                req.io.to(order.user._id.toString()).emit('notification', userNotification);
+                req.io.to(order.user._id.toString()).emit('order_update', { orderId: order._id });
+
                 return res.status(400).send('Montant invalide.');
             }
+            // --- FIN DE LA MODIFICATION ---
 
-            // Étape 3: Mettre à jour la commande si tout est correct
             if (order && !order.isPaid) {
                 order.isPaid = true;
                 order.paidAt = new Date();
@@ -243,7 +256,6 @@ router.post('/cinetpay-notify', asyncHandler(async (req, res) => {
 
                 const updatedOrder = await order.save();
                 
-                // Envoyer les notifications
                 const paymentNotif = {
                     notificationId: uuidv4(),
                     user: order.user._id,
@@ -267,7 +279,6 @@ router.post('/cinetpay-notify', asyncHandler(async (req, res) => {
     }
 }));
 
-
 // @desc    Vérifier le statut du paiement depuis le frontend
 // @route   GET /api/orders/cinetpay-status/:orderId
 // @access  Private
@@ -278,8 +289,6 @@ router.get('/cinetpay-status/:orderId', protect, asyncHandler(async (req, res) =
         res.status(404);
         throw new Error('Commande non trouvée');
     }
-
-    // Vérifier que l'utilisateur a le droit de voir cette commande
     if (order.user.toString() !== req.user._id.toString() && !req.user.isAdmin) {
         res.status(401);
         throw new Error('Non autorisé');
@@ -290,7 +299,6 @@ router.get('/cinetpay-status/:orderId', protect, asyncHandler(async (req, res) =
         status: order.status
     });
 }));
-
 // --- FIN DE LA SECTION CINETPAY ---
 
 
@@ -435,7 +443,6 @@ router.put('/:id/archive', protect, admin, asyncHandler(async (req, res) => {
         throw new Error('Commande non trouvée');
     }
 }));
-
 
 // @desc    Annuler une commande (Utilisateur)
 // @route   PUT /api/orders/:id/cancel

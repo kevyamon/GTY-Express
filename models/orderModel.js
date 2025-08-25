@@ -36,9 +36,7 @@ const orderSchema = mongoose.Schema(
       update_time: { type: String },
       email_address: { type: String },
     },
-    // --- DÉBUT DE L'AJOUT ---
-    cinetpayTransactionId: { type: String }, // Pour garder une trace de l'ID de transaction CinetPay
-    // --- FIN DE L'AJOUT ---
+    cinetpayTransactionId: { type: String },
     itemsPrice: { type: Number, required: true, default: 0.0 },
     taxPrice: { type: Number, required: true, default: 0.0 },
     shippingPrice: { type: Number, required: true, default: 0.0 },
@@ -60,6 +58,13 @@ const orderSchema = mongoose.Schema(
       default: 'En attente',
     },
     deliveredAt: { type: Date },
+
+    // --- DÉBUT DE L'AJOUT ---
+    paymentAttemptFailed: { // Pour notifier l'utilisateur si le montant ne correspond pas
+      type: Boolean,
+      default: false,
+    },
+    // --- FIN DE L'AJOUT ---
 
     isVisible: {
       type: Boolean,
