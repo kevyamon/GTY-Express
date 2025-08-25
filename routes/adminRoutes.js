@@ -8,7 +8,7 @@ import Order from '../models/orderModel.js';
 import Product from '../models/productModel.js';
 import Promotion from '../models/promotionModel.js';
 import { v4 as uuidv4 } from 'uuid';
-import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken'; 
 
 const router = express.Router();
 
